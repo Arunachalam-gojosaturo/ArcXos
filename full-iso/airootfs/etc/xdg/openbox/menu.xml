@@ -46208,7 +46208,7 @@
   <menu id="terminals-menu"/>
   <menu id="browsers-menu"/>
   <menu id="network-menu" />
-  <separator label="blackarch" />
+  <separator label="ArcXOS" />
   <menu id="blackarch-anti-forensic-menu"/>
   <menu id="blackarch-automation-menu"/>
   <menu id="blackarch-automobile-menu"/>

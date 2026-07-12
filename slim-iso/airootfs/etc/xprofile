@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 
-# vbox foo
-vbox=$(dmesg |grep -io virtualbox)
-if [ ! -z "$vbox" ]
-then
-  /usr/bin/VBoxClient --seamless
-  /usr/bin/VBoxClient --clipboard
-  /usr/bin/VBoxClient --draganddrop
-  /usr/bin/VBoxClient --vmsvga
+# Start VirtualBox Guest Services if running inside VirtualBox
+if systemd-detect-virt -q || [ -d /sys/module/vboxguest ]; then
+  /usr/bin/VBoxClient-all
 fi
 

@@ -63,7 +63,7 @@ partimage
 ppp
 pptpclient
 reflector
-reiserfsprogs
+#reiserfsprogs
 rp-pppoe
 rsync
 sdparm
@@ -94,6 +94,7 @@ zsh
 ### xorg
 xorg
 xorg-xinit
+xorg-xrandr
 
 ### video
 xf86-input-elographics
@@ -106,9 +107,9 @@ xf86-video-ati
 xf86-video-fbdev
 xf86-video-intel
 xf86-video-nouveau
-xf86-video-openchrome
+#xf86-video-openchrome
 xf86-video-vesa
-xf86-video-vmware
+#xf86-video-vmware
 
 ### base and base-devel
 base
@@ -157,7 +158,7 @@ rustup
 ### applications
 chromium
 firefox
-hexchat
+#hexchat
 htop
 galculator
 parole
@@ -169,8 +170,8 @@ ttf-roboto
 adobe-source-han-sans-otc-fonts
 
 ### gtk engines
-gtk-engines
-gtk-engine-murrine
+#gtk-engines
+#gtk-engine-murrine
 
 ### utilities
 apache
@@ -197,6 +198,7 @@ xz
 yay
 zip
 zstd
+fastfetch
 
 ### lightdm
 lightdm
@@ -207,8 +209,8 @@ mugshot
 xiccd
 
 ### installer
-calamares
-blackarch-config-calamares
+#calamares
+#blackarch-config-calamares
 
 ### xfce4
 xfce4
@@ -217,7 +219,7 @@ ristretto
 thunar-archive-plugin
 xfce4-battery-plugin
 xfce4-clipman-plugin
-xfce4-datetime-plugin
+#xfce4-datetime-plugin
 xfce4-notifyd
 xfce4-pulseaudio-plugin
 xfce4-screensaver
@@ -331,7 +333,7 @@ pwnat
 radare2
 reaver
 rebind
-recon-ng
+#recon-ng
 redsocks
 responder
 rsmangler
@@ -360,7 +362,7 @@ stunnel
 subfinder
 swaks
 tcpdump
-tcpick
+#tcpick
 tcpreplay
 thc-ipv6
 thc-pptp-bruter

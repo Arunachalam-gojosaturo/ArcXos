@@ -9316,7 +9316,7 @@ items = {
 		{ "terminals", termmenu },
 		{ "browsers", browsermenu },
     { "network", networkmenu },
-    { "blackarch", blackarchmenu }
+    { "ArcXOS", blackarchmenu }
 	}
 })
 

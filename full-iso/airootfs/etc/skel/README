@@ -1,12 +1,11 @@
 [ NETWORK ]
 
-  - The dhcpcd is not configured by default because of security reasons.
-    either use 'systemctl start dhcpcd' to start manually or 'systemctl enable
-    dhcpcd' to enable and start during boot up.
+  - NetworkManager is enabled by default. Wi-Fi, Ethernet, and DNS will
+    be configured and connected automatically immediately after boot.
 
 [ INSTALL ]
 
-  - To install BlackArch Linux simply run 'blackarch-install' and follow the
+  - To install ArcXOS simply run 'arcxos-install' and follow the
     instructions.
 
 [ EXPLOITS ]

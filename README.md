@@ -1,167 +1,116 @@
-# Overview
+# <p align="center"><img src="slim-iso/airootfs/usr/share/backgrounds/arcxoslogo.png" alt="ArcXos Logo" width="200"/><br>ArcXos Linux</p>
 
-This is the README file providing basic info on where you can find things as
-well as provide helpful links for further information on the contents of this
-repository.
+🛡️ **ArcXos** is a highly customized, high-performance, and lightweight security auditing, ethical hacking, and penetration testing Linux distribution built on top of Arch Linux and BlackArch. 
 
-## All ISOs
+Designed for both security professionals and enthusiasts, ArcXos delivers a fast, stable, and sleek desktop experience with custom aesthetics, robust tool configurations, and streamlined installation profiles.
 
-* Full ISO
-  *  The largest of the ISOs and installs *all* tools
-* NetInstall ISO
-  *  The smallest ISO and allows you to selectively install tools
-* Slim ISO
-  *   The newest ISO, by default is configured with XFCE4 and LightDM
+---
 
-## How the ISO is built
+## ✨ Features
 
-the ISO is built with the archiso tool that can be downloaded from the official
-arch repositories.
+- **🚀 Multiple Desktop Layouts**: Configured with responsive and lightweight environments including XFCE4, Awesome WM, and Openbox.
+- **🎨 Sleek Dark Aesthetics**: Custom themes, icon sets, wallpapers, and a custom LightDM greeter setup for a polished, modern look.
+- **🛠️ Professional Tooling**: Out-of-the-box support for the complete suite of BlackArch tools, optimized and categorized.
+- **⚙️ Optimized Build Systems**: Configured with modular Archiso profiles for building custom ISOs easily.
+- **📦 Dual Distribution Profiles**:
+  - **Slim Edition (`slim-iso`)**: Lightweight footprint featuring XFCE4 and essential pentesting suites.
+  - **Full Edition (`full-iso`)**: The complete security suite installing all standard security auditing tools.
 
-## File structure
-```
-Profile
- |- airootfs/
- |- efiboot/
- |- syslinux/
- |- packages.ARCH
- |- pacman.conf
- \- profiledef.sh
+---
 
-ARCH = x86_64
-```
+## 📂 Repository Structure
 
-#### packages.ARCH
-
-All files must be listed one per line. lines that are blank are ignored and so
-are lines commented out with `#` the packages **mkinitcpio** and **mkinitcpio-archiso**
-are mandatory see [issue #30](https://gitlab.archlinux.org/archlinux/archiso/-/issues/30)
-
-#### pacman.conf
-
-A configuration for pacman is required per profile. Some configuration options
-will not be used or will be modified:
-
-
-* CacheDir: the profile's option is only used if it is not the default (i.e.
-  /var/cache/pacman/pkg) and if it is not the same as the system's option. In
-  all other cases the system's pacman cache is used.
-
-* HookDir: it is always set to the /etc/pacman.d/hooks directory in the work
-  directory's airootfs to allow modification via the profile and ensure
-  interoparability with hosts using dracut ([see #73](https://gitlab.archlinux.org/archlinux/archiso/-/issues/73))
-
-* RootDir: it is always removed, as setting it explicitely otherwise refers to
-  the host's root filesystem (see man 8 pacman for further information on the -r
-  option used by pacstrap)
-
-* LogFile: it is always removed, as setting it explicitely otherwise refers to
-  the host's pacman log file (see man 8 pacman for further information on the -r
-  option used by pacstrap)
-
-* DBPath: it is always removed, as setting it explicitely otherwise refers to
-  the host's pacman database (see man 8 pacman for further information on the -r
-  option used by pacstrap)
-
-#### airootfs directory
-
-This is the directory that holdes any files that will be put into the `/etc`
-directory, as such you can add or modifty files by placing them inside the
-corresponding directory.
-
-###### example
+The repository contains the build configurations (Archiso profiles) for building the ArcXos ISOs:
 
 ```
-|- airootfs
-\- etc
-  \- hosts
+ArcXos/
+├── slim-iso/           # Configuration files for the Slim ISO edition (XFCE4 + LightDM)
+│   ├── airootfs/       # Files overlayed directly onto the live filesystem (/etc, /root, /usr, etc.)
+│   ├── efiboot/        # UEFI systemd-boot configurations
+│   ├── syslinux/       # MBR boot configurations
+│   ├── packages.x86_64 # Curated package list for the Slim edition
+│   ├── pacman.conf     # Pacman configuration for the build process
+│   └── profiledef.sh   # Main build profile definition and permissions
+│
+├── full-iso/           # Configuration files for the Full ISO edition (Full BlackArch suite)
+│   ├── airootfs/
+│   ├── efiboot/
+│   ├── syslinux/
+│   ├── packages.x86_64 # Extensive package list installing all tools
+│   ├── pacman.conf
+│   └── profiledef.sh
+│
+├── netinstall-iso/     # Network install profile (minimum bootstrap size)
+├── tools/              # Dev tools and scripts for building/managing the distribution
+├── misc/               # Additional configurations and files used during development
+├── DOCUMENTATION.md    # Detailed developer and configuration documentation
+└── README.md           # Main overview (this file)
 ```
 
-Any files will by default have the the 644 permissions and directories will
-have the 755 permissions. this can be changed in `profiledef.sh`
+---
 
-With this overlay structure it is possible to e.g. create users and set
-passwords for them, by providing airootfs/etc/passwd, airootfs/etc/shadow,
-airootfs/etc/gshadow (see man 5 passwd, man 5 shadow and man 5 gshadow
-respectively).
+## 🛠️ How to Build ArcXos ISOs
 
-If user home directories exist in the profile's airootfs, their
-ownership and (and top-level) permissions will be
-altered according to the provided information in the password file.
+ArcXos is built using the official `archiso` tools. Follow the guide below to build your own custom ArcXos ISO.
 
-#### Bootloader configuration
+### 📋 Prerequisites
 
-The profile may contain several boot loaders. They are explained in the
-following subsetions
+You must be running an Arch Linux system or a derivative. Install the build dependencies:
 
-###### efiboot directory
+```bash
+sudo pacman -S archiso git
+```
 
-This directory is mandatory when the uefi-x64.systemd-boot.esp or
-uefi-x64.systemd-boot.eltorito bootmodes are selected in profiledef.sh. It
-contains configuration for
-[systemd-boot](https://www.freedesktop.org/wiki/Software/systemd/systemd-boot/).
+### 🔨 Build Steps
 
-The custom template identifiers are only understood in the boot loader entry
-`.conf` files *(i.e. not in loader.conf).*
+1. **Clone the Repository** (if not already done):
+   ```bash
+   git clone https://github.com/Arunachalam-gojosaturo/ArcXos.git
+   cd ArcXos
+   ```
 
-###### syslinux direcotry
+2. **Select your edition**:
+   - For **Slim Edition**:
+     ```bash
+     cd slim-iso
+     ```
+   - For **Full Edition**:
+     ```bash
+     cd full-iso
+     ```
 
-This directory is mandatory when the bios.syslinux.mbr or the
-bios.syslinux.eltorito bootmodes are selected in profiledef.sh. It contains
-configuration files for syslinux or isolinux , or pxelinux used in the resuling
-image. The custom template identifiers are understood in all `.cfg` files in
-this directory.
+3. **Compile the ISO**:
+   Run the `mkarchiso` build tool with root permissions. By default, it requires a work directory and an output directory:
+   ```bash
+   sudo mkarchiso -v -w /tmp/archiso-work -o ../out .
+   ```
 
+4. **Verify & Clean up**:
+   Once completed, the build process will generate the ISO file in the `../out/` directory. You can clean up the temporary build environment files with:
+   ```bash
+   sudo rm -rf /tmp/archiso-work
+   ```
 
-# BlackArch Specific info
+---
 
-This section is for finding info specific to the BlackArch ISO repos
+## ⚙️ Key Customizations in ArcXos
 
-## Tools/Misc Info
+### Live User Credentials
+The live environment is configured with the following credentials:
+- **Default User**: `liveuser` (Password: `arcx`)
+- **Root User**: `root` (Password: `arcx`)
 
-## Tools directory
+### Custom Scripts & Startup
+- **[customize_airootfs.sh](file:///home/arunachalam/blackarch-iso/slim-iso/airootfs/root/customize_airootfs.sh)**: Sets up localization, timezone, user additions, fonts, default shell, BlackArch strap script configuration, and desktop environment settings.
+- **[profiledef.sh](file:///home/arunachalam/blackarch-iso/slim-iso/profiledef.sh)**: Defines custom permissions for filesystem overlays, ISO labels, and supported boot modes (BIOS + UEFI).
+- **Backgrounds**: Located under `airootfs/usr/share/backgrounds/` containing a collection of high-resolution cyber security and minimalist wallpapers.
 
-This directory contains a compilation of tools used by some of the devs for
-working with the ISO
+---
 
-## misc directory
+## 🤝 Contributing
 
-Contains certain files for development as well as a list of disabled tools.
-Plus the upstream packages
+We welcome contributions to package lists, aesthetic improvements, desktop themes, and documentation. Feel free to open an issue or submit a pull request!
 
-## etc directory
+## 📜 License
 
-This contains basic info that will be placed in the `/etc` directory. it
-contains the preconfigured hosts file, hostname file as well as systemd
-configurations, lightdm configurations, and will also hold xfce4 configurations
-and calamares configurations when they are installed. the configurations are
-located in the corresponding repositories which will be linked now. there will
-be more repositories linked that come in the NetInstall ISO and the Full ISO
-
-   - [xfce config](https://github.com/BlackArch/blackarch-config-xfce)
-   - [calamares](https://github.com/BlackArch/blackarch-config-calamares)
-   - [X11/Xorg](https://github.com/BlackArch/blackarch-config-x11)
-   - [zsh](https://github.com/BlackArch/blackarch-config-zsh)
-   - [vim](https://github.com/BlackArch/blackarch-config-vim)
-   - [openbox](https://github.com/BlackArch/blackarch-config-openbox)
-   - [fluxbox](https://github.com/BlackArch/blackarch-config-fluxbox)
-   - [awesomewm](https://github.com/BlackArch/blackarch-config-awesome)
-   - [spectrwm](https://github.com/BlackArch/blackarch-config-spectrwm)
-   - [LXDM](https://github.com/BlackArch/blackarch-config-lxdm)
-   - [i3](https://github.com/BlackArch/blackarch-config-i3)
-   - [gtk](https://github.com/BlackArch/blackarch-config-gtk)
-
-## root directory
-
-This holds some scripts for configuring the build and should not be modfied
-unless you have knowledge of how the `archiso` tool works
-
-## /usr/share directory
-
-This holds the backgrounds and icons for the various builds of the ISOs
-
-# Further info
-
-Further info can be found within the files themselves which will be commented
-and documented properly as time goes on.
-
+This project is licensed under the GPL-3.0 License - see the upstream Archiso/BlackArch licenses for more details.

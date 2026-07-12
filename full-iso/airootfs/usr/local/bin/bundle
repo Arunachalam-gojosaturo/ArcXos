@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "Mock bundler called, exiting successfully."
+exit 0
