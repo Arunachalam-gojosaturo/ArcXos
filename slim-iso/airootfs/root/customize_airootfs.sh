@@ -40,7 +40,7 @@ echo "blacklist pcspkr" > /etc/modprobe.d/nobeep.conf
 
 # disable network stuff
 rm -f /etc/udev/rules.d/81-dhcpcd.rules
-systemctl disable dhcpcd sshd rpcbind.service systemd-networkd.service systemd-networkd-wait-online.service systemd-resolved.service iwd.service
+systemctl disable dhcpcd sshd rpcbind.service systemd-networkd.service systemd-networkd-wait-online.service NetworkManager-wait-online.service systemd-resolved.service iwd.service
 
 # remove special (not needed) files
 rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf
@@ -58,15 +58,16 @@ cp /usr/share/blackarch/config/zsh/zshrc /etc/skel/.zshrc
 useradd -m -g users -G wheel,power,audio,video,storage -s /bin/zsh liveuser
 echo "liveuser:arcx" | chpasswd
 ln -sf /usr/share/backgrounds/arcxoslogo.png /home/liveuser/.face
-mkdir -p /home/liveuser/Desktop
+mkdir -p /etc/skel/Desktop /home/liveuser/Desktop
 chown -R liveuser:users /home/liveuser/Desktop
 chmod -R 755 /home/liveuser/Desktop
-if [ -f /usr/share/applications/calamares.desktop ]; then
-    ln -sf /usr/share/applications/calamares.desktop /home/liveuser/Desktop/calamares.desktop
-    sed -i -e "s|Install System|Install ArcXos|g" /usr/share/applications/calamares.desktop
-fi
+ln -sf /usr/share/applications/arcxos-gui-installer.desktop /etc/skel/Desktop/arcxos-gui-installer.desktop
+ln -sf /usr/share/applications/arcxos-cli-installer.desktop /etc/skel/Desktop/arcxos-cli-installer.desktop
+ln -sf /usr/share/applications/arcxos-gui-installer.desktop /home/liveuser/Desktop/arcxos-gui-installer.desktop
+ln -sf /usr/share/applications/arcxos-cli-installer.desktop /home/liveuser/Desktop/arcxos-cli-installer.desktop
 ln -sf /usr/share/applications/xfce4-terminal-emulator.desktop /home/liveuser/Desktop/terminal.desktop
-chmod +x /home/liveuser/Desktop/*.desktop
+chmod +x /etc/skel/Desktop/*.desktop /home/liveuser/Desktop/*.desktop 2>/dev/null || true
+
 
 # copy files over to home
 cp -r /etc/skel/. /root/.
@@ -116,27 +117,59 @@ cp /usr/share/blackarch/config/vim/vimrc /home/liveuser/.vimrc
 
 # Ensure XFCE desktop config sets wallpaper path correctly
 mkdir -p /etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/
-find /etc/skel/.config/xfce4/ /root/.config/xfce4/ -name "xfce4-desktop.xml" 2>/dev/null | while read -r config_file; do
+find /etc/skel/.config/xfce4/ /root/.config/xfce4/ /etc/xdg/xfce4/ -name "xfce4-desktop.xml" 2>/dev/null | while read -r config_file; do
   sed -i 's|/usr/share/backgrounds/[^"]*|/usr/share/backgrounds/background.png|g' "$config_file"
   sed -i 's|/usr/share/blackarch/wallpaper/[^"]*|/usr/share/backgrounds/background.png|g' "$config_file"
 done
 
-# Override any wallpaper in blackarch wallpaper folder if it gets installed
-if [ -d /usr/share/blackarch/wallpaper ]; then
-  find /usr/share/blackarch/wallpaper/ -type f -name "*.png" -o -name "*.jpg" | while read -r wp; do
-    cp /usr/share/backgrounds/background.png "$wp"
-  done
+# Populate all wallpaper directories with all of our custom wallpapers from /usr/share/backgrounds
+# This ensures they are selectable, while clearing out old/unused wallpapers first
+for dest_dir in "/usr/share/blackarch/wallpaper" "/usr/share/backgrounds/xfce" "/usr/share/xfce4/backdrops"; do
+  # Create the directory if it does not exist, ensuring wallpapers are placed where XFCE expects them
+  mkdir -p "$dest_dir"
+  # Clear existing files first to avoid duplicates or orphaned default files
+  rm -f "$dest_dir"/* 2>/dev/null || true
+  # Copy only files from /usr/share/backgrounds into the folder
+  find /usr/share/backgrounds -maxdepth 1 -type f -exec cp -f {} "$dest_dir/" \; 2>/dev/null || true
+done
+
+# Rename existing BlackArch installer if it exists
+if [ -f /usr/bin/blackarch-install ] && [ ! -L /usr/bin/blackarch-install ]; then
+  mv /usr/bin/blackarch-install /usr/bin/blackarch-install-original
+fi
+# Symlink blackarch-install to arcxos-installer
+ln -sf /usr/bin/arcxos-installer /usr/bin/blackarch-install
+
+# Add liveuser to wireshark group and configure dumpcap for passwordless packet capture
+if grep -q '^wireshark:' /etc/group; then
+  usermod -aG wireshark liveuser
+  if [ -f /usr/bin/dumpcap ]; then
+    chgrp wireshark /usr/bin/dumpcap
+    chmod 4755 /usr/bin/dumpcap
+  fi
 fi
 
-# Override default XFCE wallpapers to ensure they display our custom background
-if [ -d /usr/share/backgrounds/xfce ]; then
-  find /usr/share/backgrounds/xfce/ -type f | while read -r wp; do
-    cp /usr/share/backgrounds/background.png "$wp"
-  done
-fi
-if [ -d /usr/share/xfce4/backdrops ]; then
-  find /usr/share/xfce4/backdrops/ -type f | while read -r wp; do
-    cp /usr/share/backgrounds/background.png "$wp"
-  done
-fi
+# Copy finalized etc/skel to liveuser and root homes, and set permissions
+cp -rf /etc/skel/. /home/liveuser/
+cp -rf /etc/skel/. /root/
+chown -R liveuser:users /home/liveuser
+chown -R root:root /root
+
+# ==========================================
+# Post-Customization Cleanup Phase (Sizesaving)
+# ==========================================
+# 1. Clear pacman download cache completely
+pacman -Scc --noconfirm
+rm -rf /var/cache/pacman/pkg/*
+
+# 2. Clear package synchronization databases (requires pacman -Sy on live run to update)
+rm -rf /var/lib/pacman/sync/*
+
+# 3. Clear root build cache and temporary logs
+rm -rf /root/.cache/*
+find /var/log -type f -exec truncate -s 0 {} +
+
+# 4. Final file system synchronization
+sync
+
 

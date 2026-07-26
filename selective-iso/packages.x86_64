@@ -1,0 +1,253 @@
+### archiso core & system boot dependencies
+amd-ucode
+arch-install-scripts
+b43-fwcutter
+bind
+brltty
+broadcom-wl
+btrfs-progs
+clonezilla
+darkhttpd
+ddrescue
+dhclient
+dhcpcd
+diffutils
+dmraid
+dnsmasq
+dosfstools
+edk2-shell
+efibootmgr
+espeakup
+ethtool
+exfatprogs
+f2fs-tools
+fatresize
+fsarchiver
+gpart
+gpm
+gptfdisk
+grub
+haveged
+hdparm
+intel-ucode
+iwd
+jfsutils
+linux
+linux-atm
+linux-firmware
+linux-headers
+lsscsi
+lvm2
+man-db
+man-pages
+mdadm
+memtest86+-efi
+mkinitcpio
+mkinitcpio-archiso
+mkinitcpio-nfs-utils
+mtools
+nano
+nbd
+ndisc6
+nfs-utils
+nilfs-utils
+ntfs-3g
+nvme-cli
+openconnect
+openssh
+openvpn
+os-prober
+partclone
+parted
+partimage
+ppp
+pptpclient
+reflector
+rp-pppoe
+rsync
+sdparm
+sg3_utils
+smartmontools
+sof-firmware
+squashfs-tools
+sudo
+syslinux
+systemd-resolvconf
+tcpdump
+terminus-font
+testdisk
+tmux
+udftools
+usb_modeswitch
+usbutils
+vim
+vpnc
+wireless-regdb
+wireless_tools
+wpa_supplicant
+wvdial
+xfsprogs
+xl2tpd
+zsh
+
+### xorg & display
+xorg
+xorg-xinit
+xorg-xrandr
+
+### video & acceleration
+xf86-input-elographics
+xf86-input-evdev
+xf86-input-libinput
+xf86-input-vmmouse
+xf86-input-void
+xf86-video-amdgpu
+xf86-video-ati
+xf86-video-fbdev
+xf86-video-intel
+xf86-video-nouveau
+xf86-video-vesa
+mesa
+vulkan-intel
+vulkan-radeon
+vulkan-swrast
+libva-intel-driver
+intel-media-driver
+cpupower
+
+### base and base-devel
+base
+base-devel
+
+### virtual machine guest support
+open-vm-tools
+virtualbox-guest-utils
+
+### audio
+alsa-firmware
+alsa-lib
+alsa-utils
+pulseaudio
+pulseaudio-alsa
+pavucontrol
+
+### bluetooth
+bluez
+bluez-libs
+bluez-utils
+blueman
+
+### networking (NetworkManager)
+modemmanager
+networkmanager
+network-manager-applet
+networkmanager-openconnect
+networkmanager-openvpn
+networkmanager-pptp
+networkmanager-vpnc
+
+### file management
+gvfs
+gvfs-mtp
+udisks2
+xdg-user-dirs
+xdg-user-dirs-gtk
+
+### web browsers & desktop applications
+chromium
+firefox
+htop
+galculator
+parole
+xarchiver
+
+### fonts
+noto-fonts
+ttf-roboto
+adobe-source-han-sans-otc-fonts
+
+### system utilities
+apache
+bash-completion
+bzip2
+cronie
+flatpak
+fwupd
+git
+gnome-keyring
+gzip
+htop
+p7zip
+php
+php-apache
+redshift
+irqbalance
+tar
+unrar
+unzip
+xdg-desktop-portal-gtk
+xz
+yay
+zip
+zstd
+fastfetch
+
+### lightdm display manager
+lightdm
+lightdm-gtk-greeter
+
+### xfce4 dependencies
+mugshot
+xiccd
+polkit-gnome
+
+### xfce4 desktop environment
+xfce4
+mousepad
+ristretto
+thunar-archive-plugin
+xfce4-battery-plugin
+xfce4-clipman-plugin
+xfce4-notifyd
+xfce4-pulseaudio-plugin
+xfce4-screensaver
+xfce4-screenshooter
+xfce4-whiskermenu-plugin
+xfce4-xkb-plugin
+
+### ArcXos / BlackArch Core Theme & Config Packages
+blackarch-keyring
+blackarch-mirrorlist
+blackarch-menus
+blackarch-config-cursor
+blackarch-config-icons
+blackarch-config-xfce
+blackarch-config-gtk
+blackarch-config-bash
+blackarch-config-zsh
+blackarch-config-vim
+
+### SELECTIVE USER TOOLSET (Strict 21 Tool Selection)
+# 1. Nmap & Zenmap
+nmap
+zenmap
+# 2. Wireshark
+wireshark-qt
+wireshark-cli
+# 3. Aircrack-ng
+aircrack-ng
+# 4. Nikto
+nikto
+# 5. Metasploit Framework
+metasploit
+# 6. John the Ripper
+john
+# 7. Hashcat & Utils
+hashcat
+hashcat-utils
+# 8. SQLMap
+sqlmap
+# 9. OWASP ZAP
+zaproxy
+# 10. VS Code
+code

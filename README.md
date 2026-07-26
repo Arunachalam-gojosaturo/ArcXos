@@ -1,116 +1,173 @@
-# <p align="center"><img src="slim-iso/airootfs/usr/share/backgrounds/arcxoslogo.png" alt="ArcXos Logo" width="200"/><br>ArcXos Linux</p>
+# <p align="center"><img src="slim-iso/airootfs/usr/share/backgrounds/arcxoslogo.png" alt="ArcXos Logo" width="220"/><br>ArcXos Linux</p>
 
-🛡️ **ArcXos** is a highly customized, high-performance, and lightweight security auditing, ethical hacking, and penetration testing Linux distribution built on top of Arch Linux and BlackArch. 
-
-Designed for both security professionals and enthusiasts, ArcXos delivers a fast, stable, and sleek desktop experience with custom aesthetics, robust tool configurations, and streamlined installation profiles.
+<p align="center">
+  <a href="https://archlinux.org"><img src="https://img.shields.io/badge/Base-Arch_Linux-1793D1?style=for-the-badge&logo=arch-linux&logoColor=white" alt="Arch Linux Base"/></a>
+  <a href="https://blackarch.org"><img src="https://img.shields.io/badge/Security-BlackArch_Repo-800000?style=for-the-badge&logo=gnu-linux&logoColor=white" alt="BlackArch Repo"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Arch-x86__64-brightgreen?style=for-the-badge&logo=cpu" alt="x86_64"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0"/></a>
+</p>
 
 ---
 
-## ✨ Features
+## 🛡️ Overview
 
-- **🚀 Multiple Desktop Layouts**: Configured with responsive and lightweight environments including XFCE4, Awesome WM, and Openbox.
-- **🎨 Sleek Dark Aesthetics**: Custom themes, icon sets, wallpapers, and a custom LightDM greeter setup for a polished, modern look.
-- **🛠️ Professional Tooling**: Out-of-the-box support for the complete suite of BlackArch tools, optimized and categorized.
-- **⚙️ Optimized Build Systems**: Configured with modular Archiso profiles for building custom ISOs easily.
-- **📦 Dual Distribution Profiles**:
-  - **Slim Edition (`slim-iso`)**: Lightweight footprint featuring XFCE4 and essential pentesting suites.
-  - **Full Edition (`full-iso`)**: The complete security suite installing all standard security auditing tools.
+**ArcXos Linux** is a high-performance, lightweight, and custom-tailored security auditing, ethical hacking, and penetration testing distribution built on top of **Arch Linux** and **BlackArch Linux**.
+
+Designed for security professionals, red teamers, malware analysts, and security enthusiasts, ArcXos delivers a fast, stable desktop experience with custom cybersecurity wallpapers, custom GUI/CLI installers, modular build profiles, and curated tool suites.
+
+---
+
+## ✨ Key Features
+
+- **🚀 Customized Desktop Environments**: LightDM GTK greeter with XFCE4, Awesome WM, and Openbox desktop configurations.
+- **🎨 Custom Cyber Aesthetics**: Includes exclusive custom ArcXos wallpapers, dark themes, custom icons, and automated wallpaper setting scripts.
+- **🛠️ Integrated Installers**: Built-in CLI and GUI installers (`arcxos-installer`, `arcxos-gui-installer`) for easy installation.
+- **📦 Modular Distribution Profiles**:
+  - **Slim Edition (`slim-iso`)**: Fast & lightweight footprint featuring XFCE4, LightDM, and essential pentesting suites.
+  - **Selective Edition (`selective-iso`)**: Specialized environment equipped with modular deployment scripts for top enterprise security suites.
+  - **Full Edition (`full-iso`)**: Complete security suite containing the entire BlackArch repository toolset out-of-the-box.
+  - **Netinstall Edition (`netinstall-iso`)**: Minimal network bootstrap installer ISO profile.
+- **⚡ Optimized Live System**: Configured with `cow_spacesize=10G`, zsh defaults, and automatic BlackArch keyring initialization.
+
+---
+
+## 📦 Edition Comparison Matrix
+
+| Feature / Edition | Slim Edition (`slim-iso`) | Selective Edition (`selective-iso`) | Full Edition (`full-iso`) | Netinstall (`netinstall-iso`) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Desktop Environment** | XFCE4 + LightDM | XFCE4 + LightDM | XFCE4 / Openbox | CLI / Minimal |
+| **Target Use Case** | Fast Audits & Live Use | Enterprise & Custom Suites | Complete PenTesting | Custom Network Installs |
+| **Tool Footprint** | Essential Pentesting | Modular / Category Scripts | 2800+ BlackArch Tools | Minimal Bootstrap |
+| **Installers Included** | GUI + CLI Installer | Modular Setup + CLI | Standard Archiso | Netinstall Bootstrap |
+| **Recommended Storage** | 16 GB+ | 32 GB+ | 64 GB+ | 10 GB+ |
 
 ---
 
 ## 📂 Repository Structure
 
-The repository contains the build configurations (Archiso profiles) for building the ArcXos ISOs:
-
 ```
 ArcXos/
-├── slim-iso/           # Configuration files for the Slim ISO edition (XFCE4 + LightDM)
-│   ├── airootfs/       # Files overlayed directly onto the live filesystem (/etc, /root, /usr, etc.)
-│   ├── efiboot/        # UEFI systemd-boot configurations
-│   ├── syslinux/       # MBR boot configurations
+├── slim-iso/           # Slim ISO Edition (XFCE4 + LightDM + Essential Pentesting Tools)
+│   ├── airootfs/       # Target filesystem overlay (/etc, /root, /usr, /usr/share/backgrounds)
+│   ├── efiboot/        # UEFI boot manager (systemd-boot) configurations
+│   ├── syslinux/       # BIOS (MBR) bootloader configurations
 │   ├── packages.x86_64 # Curated package list for the Slim edition
-│   ├── pacman.conf     # Pacman configuration for the build process
-│   └── profiledef.sh   # Main build profile definition and permissions
+│   ├── pacman.conf     # Pacman build config with BlackArch repository enabled
+│   └── profiledef.sh   # Archiso profile definition and file permissions map
 │
-├── full-iso/           # Configuration files for the Full ISO edition (Full BlackArch suite)
-│   ├── airootfs/
-│   ├── efiboot/
-│   ├── syslinux/
-│   ├── packages.x86_64 # Extensive package list installing all tools
-│   ├── pacman.conf
-│   └── profiledef.sh
+├── selective-iso/      # Selective ISO Edition (Custom Security Category Deployments)
+│   ├── airootfs/       # Includes category setup scripts (Nessus, OpenVAS, Splunk, SentinelOne, etc.)
+│   ├── efiboot/        # UEFI boot configuration
+│   ├── syslinux/       # MBR bootloader configuration
+│   ├── packages.x86_64 # Selective package list
+│   └── profiledef.sh   # Profile metadata and permission settings
 │
-├── netinstall-iso/     # Network install profile (minimum bootstrap size)
-├── tools/              # Dev tools and scripts for building/managing the distribution
-├── misc/               # Additional configurations and files used during development
-├── DOCUMENTATION.md    # Detailed developer and configuration documentation
-└── README.md           # Main overview (this file)
+├── full-iso/           # Full ISO Edition (Complete BlackArch Pentesting Suite)
+├── netinstall-iso/     # Network installation minimal bootstrap edition
+├── tools/              # ISO compilation scripts, menu generators, and build tools
+├── misc/               # Minimal testing configs, disabled tool lists, and package templates
+├── build-selective-iso.sh # Helper script for compiling the Selective ISO profile
+├── DOCUMENTATION.md    # Developer & architecture reference guide
+└── README.md           # Distribution overview & build guide
 ```
+
+---
+
+## 🔑 Live Environment Credentials
+
+Booting into the live ArcXos ISO provides the following default access accounts:
+
+- **Live User**: `liveuser` (Password: `arcx`)
+- **Root Account**: `root` (Password: `arcx`)
+- **Sudo Access**: `wheel` group with passwordless password configuration for live user.
 
 ---
 
 ## 🛠️ How to Build ArcXos ISOs
 
-ArcXos is built using the official `archiso` tools. Follow the guide below to build your own custom ArcXos ISO.
+ArcXos ISOs are compiled using official Arch Linux `archiso` tools.
 
 ### 📋 Prerequisites
 
-You must be running an Arch Linux system or a derivative. Install the build dependencies:
+Build ArcXos from an Arch Linux system or derivative (or Arch-based container/chroot):
 
 ```bash
-sudo pacman -S archiso git
+sudo pacman -S --needed archiso git
 ```
 
-### 🔨 Build Steps
+### 🔨 Compilation Commands
 
-1. **Clone the Repository** (if not already done):
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/Arunachalam-gojosaturo/ArcXos.git
    cd ArcXos
    ```
 
-2. **Select your edition**:
-   - For **Slim Edition**:
-     ```bash
-     cd slim-iso
-     ```
-   - For **Full Edition**:
-     ```bash
-     cd full-iso
-     ```
-
-3. **Compile the ISO**:
-   Run the `mkarchiso` build tool with root permissions. By default, it requires a work directory and an output directory:
+2. **Build the Slim Edition**:
    ```bash
-   sudo mkarchiso -v -w /tmp/archiso-work -o ../out .
+   cd slim-iso
+   sudo mkarchiso -v -w /var/tmp/archiso-slim-work -o ../out .
    ```
 
-4. **Verify & Clean up**:
-   Once completed, the build process will generate the ISO file in the `../out/` directory. You can clean up the temporary build environment files with:
+3. **Build the Selective Edition**:
    ```bash
-   sudo rm -rf /tmp/archiso-work
+   cd selective-iso
+   sudo mkarchiso -v -w /var/tmp/archiso-selective-work -o ../out .
    ```
+   *(Or use the automated helper: `./build-selective-iso.sh`)*
+
+4. **Build the Full Edition**:
+   ```bash
+   cd full-iso
+   sudo mkarchiso -v -w /var/tmp/archiso-full-work -o ../out .
+   ```
+
+> [!IMPORTANT]
+> Always specify `-w /var/tmp/archiso-work` to build on physical disk storage. Avoid using default `/tmp/` because `/tmp` is mounted on `tmpfs` (RAM disk) and will run out of memory during ISO image creation.
+
+5. **Clean Temporary Build Files**:
+   ```bash
+   sudo rm -rf /var/tmp/archiso-*-work
+   ```
+
+The compiled `.iso` image will be saved inside the `out/` folder.
 
 ---
 
-## ⚙️ Key Customizations in ArcXos
+## 🎨 Aesthetic & Desktop Customization
 
-### Live User Credentials
-The live environment is configured with the following credentials:
-- **Default User**: `liveuser` (Password: `arcx`)
-- **Root User**: `root` (Password: `arcx`)
+ArcXos features custom-crafted cyber security wallpapers located under `airootfs/usr/share/backgrounds/`:
 
-### Custom Scripts & Startup
-- **[customize_airootfs.sh](file:///home/arunachalam/blackarch-iso/slim-iso/airootfs/root/customize_airootfs.sh)**: Sets up localization, timezone, user additions, fonts, default shell, BlackArch strap script configuration, and desktop environment settings.
-- **[profiledef.sh](file:///home/arunachalam/blackarch-iso/slim-iso/profiledef.sh)**: Defines custom permissions for filesystem overlays, ISO labels, and supported boot modes (BIOS + UEFI).
-- **Backgrounds**: Located under `airootfs/usr/share/backgrounds/` containing a collection of high-resolution cyber security and minimalist wallpapers.
+- `background.png` & `blackarch.png` (Default system wallpaper symlinks)
+- `Blue_cyber_theme_wallpaper_ARCXOS.jpeg`
+- `Cyber_wallpaper_ARCXOS_OS_theme.jpeg`
+- `Green_hacker_wallpaper_ARCXOS_OS.jpeg`
+- `Woman_with_ARCXOS_text_2K.jpeg`
+- `hacktheplanet.png`
+
+Custom wallpaper switcher command:
+```bash
+arcxos-set-wallpaper
+```
+
+---
+
+## 📖 Developer Documentation
+
+For detailed technical specs on adding new packages, configuring `profiledef.sh` permissions, editing `customize_airootfs.sh`, or modifying LightDM themes, see [DOCUMENTATION.md](DOCUMENTATION.md).
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions to package lists, aesthetic improvements, desktop themes, and documentation. Feel free to open an issue or submit a pull request!
+Contributions to ArcXos are welcome!
+- **Bug Reports**: Open an issue detailing build logs or hardware compatibility.
+- **Theme & Wallpapers**: Submit high-resolution custom artwork or GTK theme enhancements.
+- **Tooling & Scripts**: Submit PRs for custom installer improvements or category setup scripts.
 
-## 📜 License
+---
 
-This project is licensed under the GPL-3.0 License - see the upstream Archiso/BlackArch licenses for more details.
+## 📜 License & Credits
+
+- **License**: Licensed under [GPL-3.0](LICENSE).
+- **Upstream Credits**: Built on [Arch Linux](https://archlinux.org) and [BlackArch Linux](https://blackarch.org).

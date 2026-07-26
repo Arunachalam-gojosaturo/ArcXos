@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# Wait for xfconfd to start and desktop channel to be available (max 15 seconds)
+for i in {1..15}; do
+    if xfconf-query -c xfce4-desktop -l &>/dev/null; then
+        break
+    fi
+    sleep 1
+done
+
+WALLPAPER="/usr/share/backgrounds/background.png"
+
+# Verify wallpaper exists
+if [ ! -f "$WALLPAPER" ]; then
+    exit 0
+fi
+
+# Set the wallpaper for all workspaces and monitors
+properties=$(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E 'last-image|image-path')
+
+if [ -n "$properties" ]; then
+    for prop in $properties; do
+        xfconf-query -c xfce4-desktop -p "$prop" -s "$WALLPAPER" 2>/dev/null || true
+    done
+fi
+
+# Query active monitors via xrandr and explicitly set their properties (crucial for new profiles / VirtualBox)
+if command -v xrandr &>/dev/null; then
+    monitors=$(xrandr --query | grep " connected" | awk '{print $1}')
+    for monitor in $monitors; do
+        for ws in {0..3}; do
+            xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${monitor}/workspace${ws}/last-image" -n -t string -s "$WALLPAPER" 2>/dev/null || true
+            xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${monitor}/workspace${ws}/image-path" -n -t string -s "$WALLPAPER" 2>/dev/null || true
+        done
+    done
+fi
+
+# Explicitly set fallback monitor names to cover all bases
+for monitor in "monitor0" "monitor1" "monitorVirtual-1" "monitorVirtual1" "monitorHDMI-1" "monitorHDMI1" "monitordefault"; do
+    for ws in {0..3}; do
+        xfconf-query -c xfce4-desktop -p "/backdrop/screen0/${monitor}/workspace${ws}/last-image" -n -t string -s "$WALLPAPER" 2>/dev/null || true
+        xfconf-query -c xfce4-desktop -p "/backdrop/screen0/${monitor}/workspace${ws}/image-path" -n -t string -s "$WALLPAPER" 2>/dev/null || true
+    done
+done

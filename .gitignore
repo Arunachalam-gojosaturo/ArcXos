@@ -1,14 +1,24 @@
+# ISO build artifacts and chroot work directories
 *.iso
+*.img
+*.sqfs
+*.tar.xz
 work/
 out/
+db/
+*/work/
+*/out/
+*/db/
 
-/.gnupg/
-/.subversion/
-
+# Python cache & temporary files
+__pycache__/
+*.pyc
 *.swp
 *~
 *.tmp
-tags
 
+# User gnupg & subversion
+.gnupg/
+.subversion/
 .MTREE
 .PKGINFO

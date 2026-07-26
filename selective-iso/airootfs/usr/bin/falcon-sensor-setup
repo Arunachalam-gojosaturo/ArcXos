@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# CrowdStrike Falcon Sensor Setup & Installer Helper for ArcXos Selective ISO
+echo "========================================================"
+echo "    CrowdStrike Falcon Sensor Management Utility"
+echo "========================================================"
+if [ "$EUID" -ne 0 ]; then
+  echo "[!] Please run as root (sudo falcon-sensor-setup)"
+  exit 1
+fi
+
+if [ -f "/opt/CrowdStrike/falconctl" ]; then
+  echo "[+] CrowdStrike Falcon Sensor detected."
+  echo "    Current status:"
+  /opt/CrowdStrike/falconctl -g --cid
+else
+  echo "[*] Falcon Sensor binary not found in /opt/CrowdStrike/."
+  echo "    To install your organization's CrowdStrike Falcon Sensor:"
+  echo "    1. Download the falcon-sensor RPM/DEB/Arch package from CrowdStrike Falcon Console."
+  echo "    2. Run: sudo falconctl -s --cid=<YOUR_CUSTOMER_ID>"
+  echo "    3. Start service: sudo systemctl start falcon-sensor"
+fi

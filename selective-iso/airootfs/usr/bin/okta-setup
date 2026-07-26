@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Okta CLI & Identity Manager Setup Helper
+echo "========================================================"
+echo "    Okta CLI & Enterprise Identity Management"
+echo "========================================================"
+if command -v okta &>/dev/null; then
+  echo "[+] Okta CLI detected."
+  okta --help
+else
+  echo "[*] Okta CLI configuration helper."
+  echo "    To authenticate with your Okta tenant:"
+  echo "    1. Run: okta login"
+  echo "    2. Enter your Okta org domain (e.g., dev-123456.okta.com)."
+fi

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+# Start VirtualBox Guest Services if running inside VirtualBox
+if systemd-detect-virt -q || [ -d /sys/module/vboxguest ]; then
+  /usr/bin/VBoxClient-all
+fi
+

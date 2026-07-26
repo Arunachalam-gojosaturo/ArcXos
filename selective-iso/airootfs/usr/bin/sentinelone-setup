@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SentinelOne Singularity Agent Setup Helper for ArcXos Selective ISO
+echo "========================================================"
+echo "    SentinelOne Singularity Agent Management Utility"
+echo "========================================================"
+if [ "$EUID" -ne 0 ]; then
+  echo "[!] Please run as root (sudo sentinelone-setup)"
+  exit 1
+fi
+
+if command -v sentinelctl &>/dev/null || [ -f "/opt/sentinelone/bin/sentinelctl" ]; then
+  echo "[+] SentinelOne Agent detected."
+  echo "    Checking status..."
+  sentinelctl status
+else
+  echo "[*] SentinelOne agent not detected."
+  echo "    To register and start SentinelOne Singularity Agent:"
+  echo "    1. Obtain the SentinelOne Linux Agent installer (.pkg / .deb / .rpm) and site token."
+  echo "    2. Execute registration: sudo sentinelctl management token set <YOUR_SITE_TOKEN>"
+  echo "    3. Start agent service: sudo systemctl start sentinelone"
+fi

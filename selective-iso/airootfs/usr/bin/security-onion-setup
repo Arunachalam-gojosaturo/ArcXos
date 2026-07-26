@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Security Onion SOC Sensor & Forwarder Setup Helper
+echo "========================================================"
+echo "    Security Onion SOC Sensor & Log Collector"
+echo "========================================================"
+echo "[+] ArcXos Selective ISO Security Onion Integration"
+echo "    This utility manages SOC log forwarding and sensor agents"
+echo "    to stream live system events into Security Onion master deployment."
+echo ""
+echo "    Usage Options:"
+echo "    1. Stream syslog to Security Onion master node:"
+echo "       sudo rsyslogd -f /etc/rsyslog.conf"
+echo "    2. Verify sensor connectivity:"
+echo "       ping -c 3 <SECURITY_ONION_IP>"

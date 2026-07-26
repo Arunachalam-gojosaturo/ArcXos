@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Set ArcXos Wallpaper
+Comment=Ensures the ArcXos default wallpaper is applied properly on startup
+Exec=/usr/bin/arcxos-set-wallpaper
+OnlyShowIn=XFCE;
+StartupNotify=false
+Terminal=false
+Hidden=false

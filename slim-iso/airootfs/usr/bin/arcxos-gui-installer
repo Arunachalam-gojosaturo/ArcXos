@@ -1,0 +1,1424 @@
+#!/usr/bin/env python3
+"""
+ArcXos Linux GUI System Installer
+Standalone 100% Offline Graphical Installer with Animated Slideshow,
+Interactive Timezone Map, Partitioning Engine & Custom Partition Creator.
+
+Developed for ArcXos Linux (Lead Developer: Arunachalam)
+"""
+
+import sys
+import os
+import time
+import subprocess
+import glob
+import math
+
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QPointF, QRectF
+from PyQt6.QtGui import (
+    QPixmap, QImage, QFont, QColor, QPainter, QPen, QBrush, QIcon, QLinearGradient, QRadialGradient
+)
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QPushButton, QStackedWidget, QRadioButton, QButtonGroup, QComboBox,
+    QLineEdit, QProgressBar, QTextEdit, QTableWidget, QTableWidgetItem,
+    QHeaderView, QCheckBox, QMessageBox, QFrame, QDialog, QSpinBox, QFormLayout,
+    QGraphicsDropShadowEffect, QSplitter
+)
+
+# Colors & Theme Tokens
+COLOR_BG = "#0d1117"
+COLOR_SURFACE = "#161b22"
+COLOR_SURFACE_LIGHT = "#21262d"
+COLOR_PRIMARY = "#00f3ff"       # Neon Cyan
+COLOR_PRIMARY_HOVER = "#33f6ff"
+COLOR_ACCENT = "#7928ca"        # Cyber Purple
+COLOR_TEXT = "#f0f6fc"
+COLOR_MUTED = "#8b949e"
+COLOR_BORDER = "#30363d"
+COLOR_SUCCESS = "#2ea043"
+COLOR_ERROR = "#f85149"
+COLOR_WARNING = "#d29922"
+
+FONT_FAMILY = "Sans-Serif"
+LOGO_PATH = "/usr/share/backgrounds/arcxoslogo.png"
+WALLPAPERS_DIR = "/usr/share/backgrounds"
+
+# Timezone data with approximate coordinates (lon, lat) for world map
+CITIES_DB = [
+    {"city": "UTC / Greenwich", "zone": "UTC", "lon": 0, "lat": 51},
+    {"city": "New York", "zone": "America/New_York", "lon": -74, "lat": 40},
+    {"city": "Los Angeles", "zone": "America/Los_Angeles", "lon": -118, "lat": 34},
+    {"city": "Chicago", "zone": "America/Chicago", "lon": -87, "lat": 41},
+    {"city": "Toronto", "zone": "America/Toronto", "lon": -79, "lat": 43},
+    {"city": "Sao Paulo", "zone": "America/Sao_Paulo", "lon": -46, "lat": -23},
+    {"city": "Buenos Aires", "zone": "America/Argentina/Buenos_Aires", "lon": -58, "lat": -34},
+    {"city": "London", "zone": "Europe/London", "lon": 0, "lat": 51},
+    {"city": "Paris", "zone": "Europe/Paris", "lon": 2, "lat": 48},
+    {"city": "Berlin", "zone": "Europe/Berlin", "lon": 13, "lat": 52},
+    {"city": "Moscow", "zone": "Europe/Moscow", "lon": 37, "lat": 55},
+    {"city": "Cairo", "zone": "Africa/Cairo", "lon": 31, "lat": 30},
+    {"city": "Johannesburg", "zone": "Africa/Johannesburg", "lon": 28, "lat": -26},
+    {"city": "Dubai", "zone": "Asia/Dubai", "lon": 55, "lat": 25},
+    {"city": "Kolkata / New Delhi", "zone": "Asia/Kolkata", "lon": 77, "lat": 28},
+    {"city": "Bangkok", "zone": "Asia/Bangkok", "lon": 100, "lat": 13},
+    {"city": "Singapore", "zone": "Asia/Singapore", "lon": 103, "lat": 1},
+    {"city": "Shanghai / Beijing", "zone": "Asia/Shanghai", "lon": 116, "lat": 39},
+    {"city": "Tokyo", "zone": "Asia/Tokyo", "lon": 139, "lat": 35},
+    {"city": "Sydney", "zone": "Australia/Sydney", "lon": 151, "lat": -33},
+    {"city": "Auckland", "zone": "Pacific/Auckland", "lon": 174, "lat": -37},
+    {"city": "Honolulu", "zone": "Pacific/Honolulu", "lon": -157, "lat": 21},
+]
+
+SLIDESHOW_TEXTS = [
+    ("ArcXos Cyber Security Arsenal", "Includes over 3000+ pre-configured penetration testing, OSINT, and ethical hacking tools ready out-of-the-box."),
+    ("Lightning-Fast XFCE Desktop", "Ultra-optimized, lightweight dark-themed desktop environment tuned for low memory usage and high productivity."),
+    ("100% Offline Standalone Installer", "Complete system deployment directly from live environment images without requiring an active internet connection."),
+    ("Advanced Boot & Kernel Options", "Hardened Linux kernel with hardware virtualization, WiFi auditing drivers, and custom terminal profiles."),
+    ("Crafted by Arunachalam", "Designed for maximum stability, cutting-edge security research, and seamless dual-boot functionality.")
+]
+
+
+def run_command_output(cmd):
+    """Run shell command and return stdout string."""
+    try:
+        res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        return res.stdout.strip()
+    except Exception as e:
+        return ""
+
+
+def get_boot_mode():
+    if os.path.exists("/sys/firmware/efi"):
+        return "UEFI"
+    return "BIOS (Legacy)"
+
+
+def get_available_disks():
+    """Scan available disks using lsblk."""
+    disks = []
+    output = run_command_output("lsblk -dno NAME,SIZE,MODEL,TYPE | grep -E 'disk'")
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            name = parts[0]
+            size = parts[1]
+            model = " ".join(parts[2:]) if len(parts) > 2 else "Drive"
+            dev_path = f"/dev/{name}"
+            disks.append({
+                "dev": dev_path,
+                "name": name,
+                "size": size,
+                "model": model
+            })
+    return disks
+
+
+def get_disk_partitions(disk_dev):
+    """Get list of partitions on selected disk."""
+    parts = []
+    output = run_command_output(f"lsblk -lno NAME,SIZE,FSTYPE,LABEL,MOUNTPOINTS '{disk_dev}' | grep -E '[0-9]+'")
+    for line in output.splitlines():
+        tokens = line.split()
+        if tokens:
+            p_name = tokens[0]
+            p_size = tokens[1] if len(tokens) > 1 else "Unknown"
+            p_fs = tokens[2] if len(tokens) > 2 else "raw"
+            p_path = f"/dev/{p_name}"
+            parts.append({
+                "dev": p_path,
+                "name": p_name,
+                "size": p_size,
+                "fs": p_fs
+            })
+    return parts
+
+
+# ==========================================
+# World Map Widget for Timezone Selection
+# ==========================================
+class WorldMapWidget(QWidget):
+    timezoneSelected = pyqtSignal(str, str) # city, zone
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(240)
+        self.selected_city = CITIES_DB[0]
+        self.setMouseTracking(True)
+        self.hovered_city = None
+
+    def set_selected_city_by_zone(self, zone_name):
+        for c in CITIES_DB:
+            if c["zone"] == zone_name:
+                self.selected_city = c
+                self.update()
+                break
+
+    def mousePressEvent(self, event):
+        w = self.width()
+        h = self.height()
+        click_x = event.position().x()
+        click_y = event.position().y()
+
+        closest_city = None
+        min_dist = 999999
+
+        for c in CITIES_DB:
+            # Map lon (-180..180) -> (0..w)
+            cx = (c["lon"] + 180) * (w / 360.0)
+            # Map lat (90..-90) -> (0..h)
+            cy = (90 - c["lat"]) * (h / 180.0)
+
+            dist = math.hypot(click_x - cx, click_y - cy)
+            if dist < min_dist:
+                min_dist = dist
+                closest_city = c
+
+        if closest_city and min_dist < 40:
+            self.selected_city = closest_city
+            self.timezoneSelected.emit(closest_city["city"], closest_city["zone"])
+            self.update()
+
+    def mouseMoveEvent(self, event):
+        w = self.width()
+        h = self.height()
+        mx = event.position().x()
+        my = event.position().y()
+
+        closest = None
+        min_d = 9999
+
+        for c in CITIES_DB:
+            cx = (c["lon"] + 180) * (w / 360.0)
+            cy = (90 - c["lat"]) * (h / 180.0)
+            d = math.hypot(mx - cx, my - cy)
+            if d < min_d:
+                min_d = d
+                closest = c
+
+        if closest and min_d < 30:
+            if self.hovered_city != closest:
+                self.hovered_city = closest
+                self.setCursor(Qt.CursorShape.PointingHandCursor)
+                self.update()
+        else:
+            if self.hovered_city is not None:
+                self.hovered_city = None
+                self.unsetCursor()
+                self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+
+        # Canvas background (Deep Ocean Blue)
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0, QColor("#09101d"))
+        grad.setColorAt(1, QColor("#121b2b"))
+        painter.fillRect(0, 0, w, h, grad)
+
+        # Draw Latitude/Longitude Grid Lines
+        grid_pen = QPen(QColor("#1f2e46"), 1, Qt.PenStyle.DotLine)
+        painter.setPen(grid_pen)
+
+        for lon in range(-180, 181, 45):
+            x = (lon + 180) * (w / 360.0)
+            painter.drawLine(int(x), 0, int(x), h)
+
+        for lat in range(-90, 91, 30):
+            y = (90 - lat) * (h / 180.0)
+            painter.drawLine(0, int(y), w, int(y))
+
+        # Equator & Prime Meridian Highlight
+        eq_y = (90 - 0) * (h / 180.0)
+        pm_x = (0 + 180) * (w / 360.0)
+        painter.setPen(QPen(QColor("#2d4365"), 1, Qt.PenStyle.SolidLine))
+        painter.drawLine(0, int(eq_y), w, int(eq_y))
+        painter.drawLine(int(pm_x), 0, int(pm_x), h)
+
+        # Simple stylized continent outline approximations
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor("#1e2c40")))
+
+        # Landmass approximations (rects & polygons for high-tech map aesthetic)
+        continents = [
+            # North America
+            [(20, 20), (120, 20), (110, 80), (60, 90), (30, 60)],
+            # South America
+            [(70, 100), (100, 100), (90, 160), (75, 175), (65, 120)],
+            # Europe
+            [(160, 30), (210, 30), (210, 65), (170, 70)],
+            # Africa
+            [(165, 75), (215, 75), (220, 130), (190, 160), (165, 110)],
+            # Asia
+            [(215, 20), (330, 20), (340, 100), (240, 100), (215, 60)],
+            # Australia
+            [(290, 120), (340, 120), (335, 160), (295, 160)]
+        ]
+
+        for poly in continents:
+            pts = []
+            for px, py in poly:
+                # Convert 0..360, 0..180 approx coords
+                wx = px * (w / 360.0)
+                wy = py * (h / 180.0)
+                pts.append(QPointF(wx, wy))
+            painter.drawPolygon(pts)
+
+        # Draw City Nodes
+        for c in CITIES_DB:
+            cx = (c["lon"] + 180) * (w / 360.0)
+            cy = (90 - c["lat"]) * (h / 180.0)
+
+            is_selected = (c == self.selected_city)
+            is_hovered = (c == self.hovered_city)
+
+            if is_selected:
+                # Glowing selected pin
+                rad = QRadialGradient(cx, cy, 18)
+                rad.setColorAt(0, QColor(0, 243, 255, 200))
+                rad.setColorAt(1, QColor(0, 243, 255, 0))
+                painter.setBrush(QBrush(rad))
+                painter.drawEllipse(QPointF(cx, cy), 18, 18)
+
+                painter.setBrush(QBrush(QColor(COLOR_PRIMARY)))
+                painter.setPen(QPen(QColor("#ffffff"), 2))
+                painter.drawEllipse(QPointF(cx, cy), 6, 6)
+
+                # Label tag
+                painter.setPen(QPen(QColor("#ffffff")))
+                painter.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Bold))
+                tag_text = f"📍 {c['city']} ({c['zone']})"
+                painter.drawText(int(cx) + 10, int(cy) - 8, tag_text)
+
+            elif is_hovered:
+                painter.setBrush(QBrush(QColor(COLOR_PRIMARY_HOVER)))
+                painter.setPen(QPen(QColor("#ffffff"), 1))
+                painter.drawEllipse(QPointF(cx, cy), 5, 5)
+            else:
+                painter.setBrush(QBrush(QColor("#4e6587")))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawEllipse(QPointF(cx, cy), 3, 3)
+
+        painter.end()
+
+
+# ==========================================
+# Custom Partition Creation Dialog
+# ==========================================
+class CustomPartitionDialog(QDialog):
+    def __init__(self, disk_dev, parent=None):
+        super().__init__(parent)
+        self.disk_dev = disk_dev
+        self.setWindowTitle("Create Custom Partition - ArcXos")
+        self.setFixedSize(440, 320)
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {COLOR_SURFACE};
+                color: {COLOR_TEXT};
+                border: 1px solid {COLOR_BORDER};
+            }}
+            QLabel {{
+                color: {COLOR_TEXT};
+                font-size: 13px;
+            }}
+            QLineEdit, QComboBox, QSpinBox {{
+                background-color: {COLOR_BG};
+                color: {COLOR_TEXT};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 6px;
+                padding: 6px;
+            }}
+            QPushButton {{
+                background-color: {COLOR_PRIMARY};
+                color: #000000;
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 8px 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {COLOR_PRIMARY_HOVER};
+            }}
+        """)
+
+        layout = QVBoxLayout(self)
+
+        title = QLabel(f"Create Partition on {disk_dev}")
+        title.setFont(QFont(FONT_FAMILY, 14, QFont.Weight.Bold))
+        layout.addWidget(title)
+
+        form = QFormLayout()
+
+        self.size_spin = QSpinBox()
+        self.size_spin.setRange(1024, 2048000) # MB
+        self.size_spin.setValue(30720) # 30GB default
+        self.size_spin.setSuffix(" MB")
+        form.addRow("Size (MB):", self.size_spin)
+
+        self.fs_combo = QComboBox()
+        self.fs_combo.addItems(["ext4", "btrfs", "xfs", "fat32", "linux-swap"])
+        form.addRow("Filesystem:", self.fs_combo)
+
+        self.mount_combo = QComboBox()
+        self.mount_combo.addItems(["/", "/boot/efi", "/home", "/var", "None (swap/data)"])
+        form.addRow("Mount Point:", self.mount_combo)
+
+        self.format_check = QCheckBox("Format partition")
+        self.format_check.setChecked(True)
+        form.addRow("", self.format_check)
+
+        layout.addLayout(form)
+        layout.addStretch()
+
+        btn_box = QHBoxLayout()
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.setStyleSheet("background-color: #30363d; color: #ffffff;")
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_create = QPushButton("Create Partition")
+        btn_create.clicked.connect(self.accept)
+
+        btn_box.addWidget(btn_cancel)
+        btn_box.addWidget(btn_create)
+        layout.addLayout(btn_box)
+
+    def get_details(self):
+        return {
+            "size_mb": self.size_spin.value(),
+            "fs": self.fs_combo.currentText(),
+            "mount": self.mount_combo.currentText(),
+            "format": self.format_check.isChecked()
+        }
+
+
+# ==========================================
+# Worker Thread for Installation
+# ==========================================
+class InstallWorkerThread(QThread):
+    progressChanged = pyqtSignal(int, str) # percent, status_msg
+    installationFinished = pyqtSignal(bool, str) # success, log_or_error
+
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
+    def log(self, percent, msg):
+        self.progressChanged.emit(percent, msg)
+        time.sleep(0.3)
+
+    def run_cmd(self, cmd):
+        res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if res.returncode != 0:
+            raise Exception(f"Command failed ({res.returncode}): {cmd}\nOutput: {res.stderr or res.stdout}")
+        return res.stdout
+
+    def run(self):
+        try:
+            disk = self.config["disk"]
+            boot_mode = self.config["boot_mode"]
+            part_option = self.config["part_option"] # 1: Erase, 2: DualBoot, 3: Manual
+            user_name = self.config["username"]
+            password = self.config["password"]
+            hostname = self.config["hostname"]
+            timezone = self.config["timezone"]
+
+            self.log(2, "Initializing offline system installer engine...")
+
+            # Unmount target mounts safely
+            self.run_cmd("umount -R /mnt 2>/dev/null || true")
+
+            root_part = ""
+            boot_part = ""
+
+            if part_option == 1:
+                # Erase disk completely
+                self.log(10, f"Wiping partition table on {disk}...")
+                self.run_cmd(f"dd if=/dev/zero of='{disk}' bs=512 count=100 conv=notrunc 2>/dev/null || true")
+                self.run_cmd(f"wipefs -a '{disk}' 2>/dev/null || true")
+
+                if boot_mode == "UEFI":
+                    self.log(15, "Creating GPT partition table layout (UEFI)...")
+                    self.run_cmd(f"parted -s '{disk}' mklabel gpt")
+                    self.run_cmd(f"parted -s '{disk}' mkpart primary fat32 1MiB 513MiB")
+                    self.run_cmd(f"parted -s '{disk}' set 1 esp on")
+                    self.run_cmd(f"parted -s '{disk}' mkpart primary ext4 513MiB 100%")
+                    self.run_cmd(f"partprobe '{disk}' 2>/dev/null || true")
+                    self.run_cmd("udevadm settle")
+
+                    p_prefix = f"{disk}p" if disk[-1].isdigit() else disk
+                    boot_part = f"{p_prefix}1"
+                    root_part = f"{p_prefix}2"
+
+                    self.log(20, f"Formatting EFI System Partition ({boot_part})...")
+                    self.run_cmd(f"mkfs.fat -F 32 '{boot_part}'")
+                else:
+                    self.log(15, "Creating MBR partition table layout (BIOS)...")
+                    self.run_cmd(f"parted -s '{disk}' mklabel msdos")
+                    self.run_cmd(f"parted -s '{disk}' mkpart primary ext4 1MiB 100%")
+                    self.run_cmd(f"parted -s '{disk}' set 1 boot on")
+                    self.run_cmd(f"partprobe '{disk}' 2>/dev/null || true")
+                    self.run_cmd("udevadm settle")
+
+                    p_prefix = f"{disk}p" if disk[-1].isdigit() else disk
+                    root_part = f"{p_prefix}1"
+
+                self.log(25, f"Formatting Root Partition ({root_part})...")
+                self.run_cmd(f"mkfs.ext4 -F '{root_part}'")
+
+            elif part_option == 2:
+                # Dual boot unallocated space
+                self.log(10, f"Scanning unallocated space on {disk}...")
+                sf_out = self.run_cmd(f"sfdisk -F '{disk}' 2>/dev/null || true")
+
+                largest_start = 0
+                largest_sectors = 0
+                for line in sf_out.splitlines():
+                    tokens = line.split()
+                    if len(tokens) >= 3 and tokens[0].isdigit():
+                        start, end, sectors = int(tokens[0]), int(tokens[1]), int(tokens[2])
+                        if sectors > largest_sectors:
+                            largest_start = start
+                            largest_sectors = sectors
+
+                if largest_sectors == 0:
+                    raise Exception("No unallocated free space found on disk for dual boot.")
+
+                largest_end = largest_start + largest_sectors - 1
+                self.log(15, "Creating partition in free space...")
+                parts_before = run_command_output(f"lsblk -lno NAME '{disk}' | grep -E '[0-9]+$'").split()
+                self.run_cmd(f"parted -s '{disk}' mkpart primary ext4 {largest_start}s {largest_end}s")
+                self.run_cmd(f"partprobe '{disk}' 2>/dev/null || true")
+                self.run_cmd("udevadm settle")
+                time.sleep(1)
+                parts_after = run_command_output(f"lsblk -lno NAME '{disk}' | grep -E '[0-9]+$'").split()
+
+                new_part_name = None
+                for pa in parts_after:
+                    if pa not in parts_before:
+                        new_part_name = pa
+                        break
+
+                if not new_part_name and parts_after:
+                    new_part_name = parts_after[-1]
+
+                root_part = f"/dev/{new_part_name}"
+                self.log(25, f"Formatting dual-boot root partition ({root_part})...")
+                self.run_cmd(f"mkfs.ext4 -F '{root_part}'")
+
+                if boot_mode == "UEFI":
+                    efi_parts = run_command_output(f"lsblk -lno NAME,FSTYPE '{disk}' | grep -i 'vfat' | awk '{{print \"/dev/\"$1}}'").split()
+                    if efi_parts:
+                        boot_part = efi_parts[0]
+
+            else:
+                # Manual selected partitions
+                root_part = self.config.get("manual_root", "")
+                boot_part = self.config.get("manual_boot", "")
+                if self.config.get("format_root", False) and root_part:
+                    self.log(20, f"Formatting selected root partition ({root_part})...")
+                    self.run_cmd(f"mkfs.ext4 -F '{root_part}'")
+
+            # Mount root & boot
+            self.log(30, f"Mounting root partition {root_part} to /mnt...")
+            self.run_cmd(f"mount '{root_part}' /mnt")
+
+            if boot_mode == "UEFI" and boot_part:
+                self.log(35, f"Mounting EFI partition {boot_part} to /mnt/boot/efi...")
+                self.run_cmd("mkdir -p /mnt/boot/efi")
+                self.run_cmd(f"mount '{boot_part}' /mnt/boot/efi")
+
+            # 100% Offline System Image Deployment
+            self.log(40, "Deploying ArcXos system files from live image (100% Offline)...")
+            rsync_cmd = (
+                "rsync -aAXv --exclude='/dev/*' --exclude='/proc/*' --exclude='/sys/*' "
+                "--exclude='/tmp/*' --exclude='/run/*' --exclude='/mnt/*' --exclude='/media/*' "
+                "--exclude='/lost+found' --exclude='/boot/efi/*' --exclude='/boot/grub/*' "
+                "--exclude='/etc/fstab' --exclude='/etc/resolv.conf' / /mnt/"
+            )
+            self.run_cmd(rsync_cmd)
+
+            # Ensure kernel & initramfs exist
+            if not os.path.exists("/mnt/boot/vmlinuz-linux"):
+                self.log(60, "Copying kernel and initramfs files to target boot partition...")
+                self.run_cmd("cp -af /boot/vmlinuz-linux /mnt/boot/ 2>/dev/null || true")
+                self.run_cmd("cp -af /boot/initramfs*.img /mnt/boot/ 2>/dev/null || true")
+
+            # Generate fstab
+            self.log(65, "Generating /etc/fstab UUID mapping...")
+            self.run_cmd("genfstab -U /mnt > /mnt/etc/fstab")
+
+            # Machine-ID & Timezone & Locale
+            self.log(70, "Configuring system locale, hostname & timezone...")
+            self.run_cmd("rm -f /mnt/etc/machine-id /mnt/var/lib/dbus/machine-id")
+            self.run_cmd("arch-chroot /mnt systemd-machine-id-setup")
+            self.run_cmd(f"arch-chroot /mnt ln -sf /usr/share/zoneinfo/{timezone} /etc/localtime")
+            self.run_cmd("arch-chroot /mnt hwclock --systohc 2>/dev/null || true")
+            self.run_cmd("sed -i 's/#\\(en_US\\.UTF-8\\)/\\1/' /mnt/etc/locale.gen 2>/dev/null || true")
+            self.run_cmd("arch-chroot /mnt locale-gen 2>/dev/null || true")
+
+            with open("/mnt/etc/hostname", "w") as f:
+                f.write(f"{hostname}\n")
+
+            with open("/mnt/etc/hosts", "w") as f:
+                f.write(f"127.0.0.1\tlocalhost\n::1\t\tlocalhost\n127.0.1.1\t{hostname}.localdomain\t{hostname}\n")
+
+            # Enable NetworkManager & LightDM
+            self.run_cmd("arch-chroot /mnt systemctl enable NetworkManager lightdm 2>/dev/null || true")
+
+            # User Account Setup
+            self.log(80, f"Creating user account '{user_name}'...")
+            self.run_cmd(f"arch-chroot /mnt userdel -r liveuser 2>/dev/null || true")
+            self.run_cmd(f"arch-chroot /mnt userdel -r '{user_name}' 2>/dev/null || true")
+            self.run_cmd(f"arch-chroot /mnt useradd -m -g users -G wheel,power,audio,video,storage -s /bin/zsh '{user_name}'")
+            self.run_cmd(f"echo '{user_name}:{password}' | arch-chroot /mnt chpasswd")
+            self.run_cmd(f"echo 'root:{password}' | arch-chroot /mnt chpasswd")
+
+            # Configure Sudo
+            with open("/mnt/etc/sudoers.d/wheel", "w") as f:
+                f.write("%wheel ALL=(ALL:ALL) ALL\n")
+            os.chmod("/mnt/etc/sudoers.d/wheel", 0o440)
+
+            # Regenerate initramfs
+            self.log(85, "Regenerating initramfs images...")
+            self.run_cmd("arch-chroot /mnt mkinitcpio -P 2>/dev/null || true")
+
+            # Bootloader Installation (GRUB)
+            self.log(90, "Installing GRUB bootloader...")
+            grub_default = """
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="ArcXos"
+GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"
+GRUB_CMDLINE_LINUX=""
+GRUB_PRELOAD_MODULES="part_gpt part_msdos ext2 fat search search_fs_uuid"
+GRUB_DISABLE_OS_PROBER=false
+GRUB_TIMEOUT_STYLE=menu
+GRUB_GFXMODE=auto
+GRUB_BACKGROUND="/usr/share/backgrounds/splash.png"
+"""
+            with open("/mnt/etc/default/grub", "w") as f:
+                f.write(grub_default)
+
+            if boot_mode == "UEFI":
+                self.run_cmd("arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ArcXos --recheck")
+                self.run_cmd("arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable")
+            else:
+                self.run_cmd(f"arch-chroot /mnt grub-install --target=i386-pc '{disk}'")
+
+            self.run_cmd("arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg")
+
+            # Clean live services & sync
+            self.log(98, "Finalizing installation & unmounting filesystems...")
+            self.run_cmd("arch-chroot /mnt systemctl disable choose-mirror.service pacman-init.service vboxservice.service 2>/dev/null || true")
+            self.run_cmd("umount -R /mnt 2>/dev/null || true")
+
+            self.log(100, "Installation completed successfully!")
+            self.installationFinished.emit(True, "Installation complete.")
+
+        except Exception as e:
+            self.installationFinished.emit(False, str(e))
+
+
+# ==========================================
+# Main GUI Window
+# ==========================================
+class ArcXosInstallerWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("ArcXos Linux OS Installer")
+        self.setMinimumSize(960, 640)
+        self.resize(1024, 680)
+
+        self.boot_mode = get_boot_mode()
+        self.available_disks = get_available_disks()
+        self.wallpapers = self.load_wallpaper_paths()
+        self.slideshow_index = 0
+
+        self.setup_stylesheet()
+        self.init_ui()
+
+    def setup_stylesheet(self):
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: {COLOR_BG};
+                color: {COLOR_TEXT};
+            }}
+            QWidget {{
+                font-family: '{FONT_FAMILY}';
+                color: {COLOR_TEXT};
+            }}
+            QFrame#HeaderBar {{
+                background-color: {COLOR_SURFACE};
+                border-bottom: 1px solid {COLOR_BORDER};
+            }}
+            QFrame#StepBar {{
+                background-color: {COLOR_SURFACE_LIGHT};
+                border-bottom: 1px solid {COLOR_BORDER};
+            }}
+            QLabel#StepItem {{
+                color: {COLOR_MUTED};
+                font-size: 12px;
+                font-weight: bold;
+                padding: 6px 12px;
+            }}
+            QLabel#StepItemActive {{
+                color: {COLOR_PRIMARY};
+                font-size: 12px;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-bottom: 2px solid {COLOR_PRIMARY};
+            }}
+            QPushButton {{
+                background-color: {COLOR_SURFACE_LIGHT};
+                color: {COLOR_TEXT};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 6px;
+                padding: 8px 18px;
+                font-weight: bold;
+                font-size: 13px;
+            }}
+            QPushButton:hover {{
+                background-color: {COLOR_BORDER};
+                border-color: {COLOR_PRIMARY};
+            }}
+            QPushButton#PrimaryBtn {{
+                background-color: {COLOR_PRIMARY};
+                color: #000000;
+                border: none;
+            }}
+            QPushButton#PrimaryBtn:hover {{
+                background-color: {COLOR_PRIMARY_HOVER};
+            }}
+            QLineEdit, QComboBox {{
+                background-color: {COLOR_SURFACE};
+                color: {COLOR_TEXT};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 13px;
+            }}
+            QLineEdit:focus, QComboBox:focus {{
+                border-color: {COLOR_PRIMARY};
+            }}
+            QRadioButton {{
+                font-size: 13px;
+                spacing: 8px;
+            }}
+            QRadioButton::indicator {{
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                border: 2px solid {COLOR_MUTED};
+            }}
+            QRadioButton::indicator:checked {{
+                background-color: {COLOR_PRIMARY};
+                border-color: {COLOR_PRIMARY};
+            }}
+            QProgressBar {{
+                background-color: {COLOR_SURFACE};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 8px;
+                text-align: center;
+                color: #ffffff;
+                font-weight: bold;
+
+            }}
+            QProgressBar::chunk {{
+                background-color: {COLOR_PRIMARY};
+                border-radius: 7px;
+            }}
+            QTableWidget {{
+                background-color: {COLOR_SURFACE};
+                gridline-color: {COLOR_BORDER};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 6px;
+            }}
+            QHeaderView::section {{
+                background-color: {COLOR_SURFACE_LIGHT};
+                color: {COLOR_PRIMARY};
+                font-weight: bold;
+                padding: 6px;
+                border: none;
+            }}
+        """)
+
+    def load_wallpaper_paths(self):
+        exts = ('*.png', '*.jpg', '*.jpeg', '*.webp', '*.PNG', '*.JPG', '*.JPEG', '*.WEBP')
+        paths = []
+        for ext in exts:
+            paths.extend(glob.glob(os.path.join(WALLPAPERS_DIR, ext)))
+        paths.sort()
+        # Exclude logo from wallpapers slideshow if present
+        return [p for p in paths if "arcxoslogo" not in os.path.basename(p).lower()]
+
+    def init_ui(self):
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
+        main_layout = QVBoxLayout(main_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Header Bar
+        header = QFrame()
+        header.setObjectName("HeaderBar")
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(20, 10, 20, 10)
+
+        logo_label = QLabel()
+        if os.path.exists(LOGO_PATH):
+            pix = QPixmap(LOGO_PATH).scaled(42, 42, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            logo_label.setPixmap(pix)
+        else:
+            logo_label.setText("⚡")
+
+        title_box = QVBoxLayout()
+        title_lbl = QLabel("ArcXos Linux OS Installer")
+        title_lbl.setFont(QFont(FONT_FAMILY, 15, QFont.Weight.Bold))
+        subtitle_lbl = QLabel("100% Standalone Offline Installation Engine")
+        subtitle_lbl.setStyleSheet(f"color: {COLOR_MUTED}; font-size: 11px;")
+        title_box.addWidget(title_lbl)
+        title_box.addWidget(subtitle_lbl)
+
+        header_layout.addWidget(logo_label)
+        header_layout.addLayout(title_box)
+        header_layout.addStretch()
+
+        badge = QLabel("OFFLINE MODE READY")
+        badge.setStyleSheet(f"background-color: #1b382b; color: {COLOR_SUCCESS}; font-weight: bold; padding: 4px 10px; border-radius: 12px; border: 1px solid #2ea043;")
+        header_layout.addWidget(badge)
+
+        main_layout.addWidget(header)
+
+        # Step Indicator Bar
+        step_bar = QFrame()
+        step_bar.setObjectName("StepBar")
+        self.step_layout = QHBoxLayout(step_bar)
+        self.step_layout.setContentsMargins(20, 0, 20, 0)
+
+        self.step_labels = []
+        steps = ["1. Welcome", "2. Timezone", "3. Partitioning", "4. Credentials", "5. Installing", "6. Finish & About"]
+        for i, s in enumerate(steps):
+            lbl = QLabel(s)
+            lbl.setObjectName("StepItemActive" if i == 0 else "StepItem")
+            self.step_labels.append(lbl)
+            self.step_layout.addWidget(lbl)
+            if i < len(steps) - 1:
+                arrow = QLabel("›")
+                arrow.setStyleSheet(f"color: {COLOR_MUTED};")
+                self.step_layout.addWidget(arrow)
+
+        self.step_layout.addStretch()
+        main_layout.addWidget(step_bar)
+
+        # Stacked Pages Widget
+        self.stacked_widget = QStackedWidget()
+        main_layout.addWidget(self.stacked_widget, 1)
+
+        # Create Pages
+        self.page_welcome = self.create_page_welcome()
+        self.page_timezone = self.create_page_timezone()
+        self.page_partition = self.create_page_partition()
+        self.page_credentials = self.create_page_credentials()
+        self.page_installing = self.create_page_installing()
+        self.page_finish = self.create_page_finish()
+
+        self.stacked_widget.addWidget(self.page_welcome)
+        self.stacked_widget.addWidget(self.page_timezone)
+        self.stacked_widget.addWidget(self.page_partition)
+        self.stacked_widget.addWidget(self.page_credentials)
+        self.stacked_widget.addWidget(self.page_installing)
+        self.stacked_widget.addWidget(self.page_finish)
+
+        # Bottom Control Bar
+        bottom_bar = QFrame()
+        bottom_bar.setStyleSheet(f"background-color: {COLOR_SURFACE}; border-top: 1px solid {COLOR_BORDER};")
+        bottom_layout = QHBoxLayout(bottom_bar)
+        bottom_layout.setContentsMargins(20, 12, 20, 12)
+
+        self.btn_back = QPushButton("< Back")
+        self.btn_back.clicked.connect(self.go_back)
+        self.btn_back.setEnabled(False)
+
+        self.btn_next = QPushButton("Next >")
+        self.btn_next.setObjectName("PrimaryBtn")
+        self.btn_next.clicked.connect(self.go_next)
+
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.clicked.connect(self.close)
+
+        bottom_layout.addWidget(btn_cancel)
+        bottom_layout.addStretch()
+        bottom_layout.addWidget(self.btn_back)
+        bottom_layout.addWidget(self.btn_next)
+
+        main_layout.addWidget(bottom_bar)
+
+    def update_step_indicator(self, index):
+        for i, lbl in enumerate(self.step_labels):
+            if i == index:
+                lbl.setObjectName("StepItemActive")
+            else:
+                lbl.setObjectName("StepItem")
+            lbl.setStyle(lbl.style()) # Refresh stylesheet
+
+        self.btn_back.setEnabled(index > 0 and index < 4)
+        if index == 4: # Installing page
+            self.btn_back.setEnabled(False)
+            self.btn_next.setEnabled(False)
+            self.btn_next.setText("Installing...")
+        elif index == 5: # Finish page
+            self.btn_back.setEnabled(False)
+            self.btn_next.setEnabled(True)
+            self.btn_next.setText("Finish & Reboot")
+        else:
+            self.btn_next.setEnabled(True)
+            self.btn_next.setText("Next >")
+
+    # ==========================================
+    # Page 1: Welcome
+    # ==========================================
+    def create_page_welcome(self):
+        page = QWidget()
+        layout = QHBoxLayout(page)
+        layout.setContentsMargins(30, 30, 30, 30)
+
+        # Left Column: Logo & Welcome Banner
+        left_box = QVBoxLayout()
+        logo_img = QLabel()
+        logo_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if os.path.exists(LOGO_PATH):
+            logo_img.setPixmap(QPixmap(LOGO_PATH).scaled(220, 220, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        else:
+            logo_img.setText("⚡ ArcXos")
+            logo_img.setFont(QFont(FONT_FAMILY, 32))
+
+        left_box.addWidget(logo_img)
+
+        w_title = QLabel("Welcome to ArcXos Linux")
+        w_title.setFont(QFont(FONT_FAMILY, 20, QFont.Weight.Bold))
+        w_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        w_title.setStyleSheet(f"color: {COLOR_PRIMARY};")
+
+        w_desc = QLabel("Slim Edition — Elite Cybersecurity & Penetration Testing OS")
+        w_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        w_desc.setStyleSheet(f"color: {COLOR_MUTED}; font-size: 13px;")
+
+        left_box.addWidget(w_title)
+        left_box.addWidget(w_desc)
+        left_box.addStretch()
+
+        # Right Column: Pre-install System Diagnostics
+        right_box = QVBoxLayout()
+        diag_card = QFrame()
+        diag_card.setStyleSheet(f"background-color: {COLOR_SURFACE}; border: 1px solid {COLOR_BORDER}; border-radius: 10px; padding: 20px;")
+        diag_layout = QVBoxLayout(diag_card)
+
+        diag_header = QLabel("System Requirements & Checks")
+        diag_header.setFont(QFont(FONT_FAMILY, 15, QFont.Weight.Bold))
+        diag_layout.addWidget(diag_header)
+
+        checks = [
+            (f"Boot Mode: {self.boot_mode}", "✔ Compatible", COLOR_SUCCESS),
+            (f"Detected Disks: {len(self.available_disks)} Drive(s)", "✔ Ready", COLOR_SUCCESS),
+            ("Offline Installation Support", "✔ Standalone Media Detected", COLOR_SUCCESS),
+            ("Target Architecture: x86_64", "✔ Supported", COLOR_SUCCESS),
+            ("Desktop Environment: XFCE4 Dark", "✔ Pre-packaged", COLOR_SUCCESS),
+        ]
+
+        for text, status, color in checks:
+            row = QHBoxLayout()
+            lbl_t = QLabel(text)
+            lbl_s = QLabel(status)
+            lbl_s.setStyleSheet(f"color: {color}; font-weight: bold;")
+            row.addWidget(lbl_t)
+            row.addStretch()
+            row.addWidget(lbl_s)
+            diag_layout.addLayout(row)
+
+        right_box.addWidget(diag_card)
+        right_box.addStretch()
+
+        layout.addLayout(left_box, 1)
+        layout.addLayout(right_box, 1)
+        return page
+
+    # ==========================================
+    # Page 2: Timezone Selection with Map
+    # ==========================================
+    def create_page_timezone(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 20)
+
+        header_lbl = QLabel("Timezone & Region Selection")
+        header_lbl.setFont(QFont(FONT_FAMILY, 16, QFont.Weight.Bold))
+        sub_lbl = QLabel("Click on the world map or select your target location from the dropdown menu.")
+        sub_lbl.setStyleSheet(f"color: {COLOR_MUTED}; font-size: 12px;")
+
+        layout.addWidget(header_lbl)
+        layout.addWidget(sub_lbl)
+
+        # Interactive World Map Canvas
+        self.world_map = WorldMapWidget()
+        self.world_map.timezoneSelected.connect(self.on_map_timezone_selected)
+        layout.addWidget(self.world_map, 1)
+
+        # Controls & Live Clock Box
+        ctrl_card = QFrame()
+        ctrl_card.setStyleSheet(f"background-color: {COLOR_SURFACE}; border: 1px solid {COLOR_BORDER}; border-radius: 8px; padding: 12px;")
+        ctrl_layout = QHBoxLayout(ctrl_card)
+
+        city_lbl = QLabel("Location:")
+        city_lbl.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))
+
+        self.city_combo = QComboBox()
+        for c in CITIES_DB:
+            self.city_combo.addItem(f"{c['city']} ({c['zone']})", c["zone"])
+
+        self.city_combo.currentIndexChanged.connect(self.on_combo_timezone_changed)
+
+        self.clock_lbl = QLabel()
+        self.clock_lbl.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))
+        self.clock_lbl.setStyleSheet(f"color: {COLOR_PRIMARY};")
+
+        ctrl_layout.addWidget(city_lbl)
+        ctrl_layout.addWidget(self.city_combo, 1)
+        ctrl_layout.addSpacing(20)
+        ctrl_layout.addWidget(self.clock_lbl)
+
+        layout.addWidget(ctrl_card)
+
+        # Timer to update live clock preview
+        self.clock_timer = QTimer(self)
+        self.clock_timer.timeout.connect(self.update_live_clock)
+        self.clock_timer.start(1000)
+        self.update_live_clock()
+
+        return page
+
+    def on_map_timezone_selected(self, city_name, zone_name):
+        index = self.city_combo.findData(zone_name)
+        if index >= 0:
+            self.city_combo.blockSignals(True)
+            self.city_combo.setCurrentIndex(index)
+            self.city_combo.blockSignals(False)
+        self.update_live_clock()
+
+    def on_combo_timezone_changed(self, index):
+        zone_name = self.city_combo.itemData(index)
+        self.world_map.set_selected_city_by_zone(zone_name)
+        self.update_live_clock()
+
+    def update_live_clock(self):
+        try:
+            zone_name = self.city_combo.currentData() or "UTC"
+            # Set TZ environment variable temporarily to format time
+            os.environ["TZ"] = zone_name
+            time.tzset()
+            cur_time = time.strftime("%Y-%m-%d %H:%M:%S %Z")
+            self.clock_lbl.setText(f"🕒 Local Time: {cur_time}")
+        except Exception:
+            self.clock_lbl.setText("🕒 Time: Syncing...")
+
+    # ==========================================
+    # Page 3: Partitioning & Disk Selection
+    # ==========================================
+    def create_page_partition(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 20)
+
+        header_lbl = QLabel("Target Disk & Partition Selection")
+        header_lbl.setFont(QFont(FONT_FAMILY, 16, QFont.Weight.Bold))
+        sub_lbl = QLabel("Choose installation strategy, select partitions or create custom partition layouts.")
+        sub_lbl.setStyleSheet(f"color: {COLOR_MUTED}; font-size: 12px;")
+
+        layout.addWidget(header_lbl)
+        layout.addWidget(sub_lbl)
+
+        # Target Disk Dropdown
+        disk_box = QHBoxLayout()
+        disk_lbl = QLabel("Target Hard Disk:")
+        disk_lbl.setFont(QFont(FONT_FAMILY, 13, QFont.Weight.Bold))
+        self.disk_combo = QComboBox()
+
+        for d in self.available_disks:
+            self.disk_combo.addItem(f"{d['dev']} - {d['model']} ({d['size']})", d["dev"])
+
+        self.disk_combo.currentIndexChanged.connect(self.on_disk_selection_changed)
+
+        disk_box.addWidget(disk_lbl)
+        disk_box.addWidget(self.disk_combo, 1)
+
+        btn_gparted = QPushButton("🛠 Launch GParted")
+        btn_gparted.clicked.connect(self.launch_gparted)
+        disk_box.addWidget(btn_gparted)
+
+        layout.addLayout(disk_box)
+
+        # Options Radio Group
+        self.part_button_group = QButtonGroup(self)
+
+        self.radio_erase = QRadioButton("Erase Entire Disk (Automatic) — Wipe disk & create fresh partition layout")
+        self.radio_dual = QRadioButton("Install Alongside (Dual Boot) — Use largest free unallocated space")
+        self.radio_manual = QRadioButton("Manual Partitioning — Custom select existing partitions or format manually")
+
+        self.radio_erase.setChecked(True)
+
+        self.part_button_group.addButton(self.radio_erase, 1)
+        self.part_button_group.addButton(self.radio_dual, 2)
+        self.part_button_group.addButton(self.radio_manual, 3)
+
+        layout.addWidget(self.radio_erase)
+        layout.addWidget(self.radio_dual)
+        layout.addWidget(self.radio_manual)
+
+        # Custom Partition Creator Bar
+        custom_bar = QHBoxLayout()
+        btn_create_custom = QPushButton("➕ Create Custom Partition")
+        btn_create_custom.clicked.connect(self.open_custom_partition_dialog)
+        custom_bar.addWidget(btn_create_custom)
+        custom_bar.addStretch()
+        layout.addLayout(custom_bar)
+
+        # Partitions Table for Manual Mode
+        self.part_table = QTableWidget()
+        self.part_table.setColumnCount(4)
+        self.part_table.setHorizontalHeaderLabels(["Partition", "Size", "Filesystem", "Action / Mount"])
+        self.part_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        layout.addWidget(self.part_table, 1)
+        self.on_disk_selection_changed()
+
+        return page
+
+    def on_disk_selection_changed(self):
+        disk_dev = self.disk_combo.currentData()
+        if not disk_dev:
+            return
+
+        parts = get_disk_partitions(disk_dev)
+        self.part_table.setRowCount(len(parts))
+
+        for row, p in enumerate(parts):
+            self.part_table.setItem(row, 0, QTableWidgetItem(p["dev"]))
+            self.part_table.setItem(row, 1, QTableWidgetItem(p["size"]))
+            self.part_table.setItem(row, 2, QTableWidgetItem(p["fs"]))
+            self.part_table.setItem(row, 3, QTableWidgetItem("Use as Root (/)" if row == 0 else "Select Mount"))
+
+    def launch_gparted(self):
+        try:
+            subprocess.Popen(["gparted"])
+        except Exception:
+            QMessageBox.warning(self, "GParted", "Could not launch GParted. Make sure gparted is installed.")
+
+    def open_custom_partition_dialog(self):
+        disk_dev = self.disk_combo.currentData() or "/dev/sda"
+        dlg = CustomPartitionDialog(disk_dev, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            details = dlg.get_details()
+            QMessageBox.information(
+                self, "Partition Configured",
+                f"Configured custom partition ({details['size_mb']} MB {details['fs']}) on {disk_dev}.\n"
+                f"Mount point: {details['mount']}"
+            )
+            self.on_disk_selection_changed()
+
+    # ==========================================
+    # Page 4: User Credentials
+    # ==========================================
+    def create_page_credentials(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 20)
+
+        header_lbl = QLabel("User Account & System Credentials")
+        header_lbl.setFont(QFont(FONT_FAMILY, 16, QFont.Weight.Bold))
+        sub_lbl = QLabel("Configure system owner details, user account and security credentials.")
+        sub_lbl.setStyleSheet(f"color: {COLOR_MUTED}; font-size: 12px;")
+
+        layout.addWidget(header_lbl)
+        layout.addWidget(sub_lbl)
+
+        card = QFrame()
+        card.setStyleSheet(f"background-color: {COLOR_SURFACE}; border: 1px solid {COLOR_BORDER}; border-radius: 8px; padding: 20px;")
+        form = QFormLayout(card)
+        form.setSpacing(14)
+
+        self.input_fullname = QLineEdit()
+        self.input_fullname.setText("Arunachalam Owner")
+        form.addRow("Your Name:", self.input_fullname)
+
+        self.input_username = QLineEdit()
+        self.input_username.setText("arunachalam")
+        form.addRow("Username:", self.input_username)
+
+        self.input_hostname = QLineEdit()
+        self.input_hostname.setText("arcxos")
+        form.addRow("Computer Name (Hostname):", self.input_hostname)
+
+        self.input_pass = QLineEdit()
+        self.input_pass.setEchoMode(QLineEdit.EchoMode.Password)
+        self.input_pass.setText("arcx")
+        form.addRow("Password:", self.input_pass)
+
+        self.input_pass_confirm = QLineEdit()
+        self.input_pass_confirm.setEchoMode(QLineEdit.EchoMode.Password)
+        self.input_pass_confirm.setText("arcx")
+        form.addRow("Confirm Password:", self.input_pass_confirm)
+
+        self.check_same_root = QCheckBox("Use the same password for the Administrator (root) account")
+        self.check_same_root.setChecked(True)
+        form.addRow("", self.check_same_root)
+
+        layout.addWidget(card)
+        layout.addStretch()
+        return page
+
+    # ==========================================
+    # Page 5: Installation & Animated Slideshow
+    # ==========================================
+    def create_page_installing(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Upper Container: Wallpaper Slideshow with Overlay Text
+        self.slideshow_frame = QFrame()
+        self.slideshow_frame.setStyleSheet(f"background-color: {COLOR_SURFACE}; border: 1px solid {COLOR_BORDER}; border-radius: 10px;")
+        slide_layout = QVBoxLayout(self.slideshow_frame)
+        slide_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.slide_img_lbl = QLabel()
+        self.slide_img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.slide_img_lbl.setMinimumHeight(320)
+        slide_layout.addWidget(self.slide_img_lbl, 1)
+
+        # Feature Text Overlay
+        self.slide_title_lbl = QLabel("ArcXos Cyber Security OS")
+        self.slide_title_lbl.setFont(QFont(FONT_FAMILY, 16, QFont.Weight.Bold))
+        self.slide_title_lbl.setStyleSheet(f"color: {COLOR_PRIMARY}; background-color: rgba(13, 17, 23, 0.85); padding: 8px 16px;")
+
+        self.slide_desc_lbl = QLabel("Installing system files offline...")
+        self.slide_desc_lbl.setStyleSheet("color: #ffffff; background-color: rgba(13, 17, 23, 0.85); padding: 4px 16px 10px 16px; font-size: 13px;")
+
+        slide_layout.addWidget(self.slide_title_lbl)
+        slide_layout.addWidget(self.slide_desc_lbl)
+
+        layout.addWidget(self.slideshow_frame, 1)
+
+        # Progress Bar & Logs
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFixedHeight(24)
+        layout.addWidget(self.progress_bar)
+
+        self.status_lbl = QLabel("Preparing installation...")
+        self.status_lbl.setFont(QFont(FONT_FAMILY, 11, QFont.Weight.Bold))
+        self.status_lbl.setStyleSheet(f"color: {COLOR_PRIMARY};")
+        layout.addWidget(self.status_lbl)
+
+        # Slideshow Timer
+        self.slideshow_timer = QTimer(self)
+        self.slideshow_timer.timeout.connect(self.rotate_slideshow)
+
+        return page
+
+    def start_installation(self):
+        # Prepare installation config
+        selected_disk = self.disk_combo.currentData() or "/dev/sda"
+        part_option = self.part_button_group.checkedId()
+        username = self.input_username.text().strip() or "arunachalam"
+        password = self.input_pass.text() or "arcx"
+        hostname = self.input_hostname.text().strip() or "arcxos"
+        timezone = self.city_combo.currentData() or "UTC"
+
+        config = {
+            "disk": selected_disk,
+            "boot_mode": self.boot_mode,
+            "part_option": part_option,
+            "username": username,
+            "password": password,
+            "hostname": hostname,
+            "timezone": timezone
+        }
+
+        # Start Slideshow
+        self.rotate_slideshow()
+        self.slideshow_timer.start(5000)
+
+        # Start Worker Thread
+        self.worker = InstallWorkerThread(config)
+        self.worker.progressChanged.connect(self.on_install_progress)
+        self.worker.installationFinished.connect(self.on_install_finished)
+        self.worker.start()
+
+    def rotate_slideshow(self):
+        if not self.wallpapers:
+            return
+
+        wp_path = self.wallpapers[self.slideshow_index % len(self.wallpapers)]
+        text_title, text_desc = SLIDESHOW_TEXTS[self.slideshow_index % len(SLIDESHOW_TEXTS)]
+
+        pix = QPixmap(wp_path)
+        if not pix.isNull():
+            scaled = pix.scaled(self.slideshow_frame.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+            self.slide_img_lbl.setPixmap(scaled)
+
+        self.slide_title_lbl.setText(text_title)
+        self.slide_desc_lbl.setText(text_desc)
+
+        self.slideshow_index += 1
+
+    def on_install_progress(self, percent, msg):
+        self.progress_bar.setValue(percent)
+        self.status_lbl.setText(f"Status: {msg}")
+
+    def on_install_finished(self, success, result_msg):
+        self.slideshow_timer.stop()
+        if success:
+            self.stacked_widget.setCurrentIndex(5)
+            self.update_step_indicator(5)
+            self.populate_about_details()
+        else:
+            QMessageBox.critical(self, "Installation Error", f"Installation failed:\n{result_msg}")
+
+    # ==========================================
+    # Page 6: Finish & About Page
+    # ==========================================
+    def create_page_finish(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 20)
+
+        # Success Banner
+        succ_card = QFrame()
+        succ_card.setStyleSheet(f"background-color: #12281e; border: 1px solid {COLOR_SUCCESS}; border-radius: 8px; padding: 14px;")
+        succ_layout = QHBoxLayout(succ_card)
+
+        succ_icon = QLabel("🎉")
+        succ_icon.setFont(QFont(FONT_FAMILY, 24))
+
+        succ_txt_box = QVBoxLayout()
+        succ_t = QLabel("Installation Completed Successfully!")
+        succ_t.setFont(QFont(FONT_FAMILY, 15, QFont.Weight.Bold))
+        succ_t.setStyleSheet(f"color: {COLOR_SUCCESS};")
+
+        succ_d = QLabel("ArcXos Linux is now installed on your system. You can restart your computer into the new OS.")
+        succ_d.setStyleSheet("color: #ffffff; font-size: 12px;")
+
+        succ_txt_box.addWidget(succ_t)
+        succ_txt_box.addWidget(succ_d)
+
+        succ_layout.addWidget(succ_icon)
+        succ_layout.addLayout(succ_txt_box)
+        succ_layout.addStretch()
+
+        layout.addWidget(succ_card)
+
+        # About & System Details Card
+        about_card = QFrame()
+        about_card.setStyleSheet(f"background-color: {COLOR_SURFACE}; border: 1px solid {COLOR_BORDER}; border-radius: 8px; padding: 20px;")
+        about_layout = QHBoxLayout(about_card)
+
+        logo_lbl = QLabel()
+        if os.path.exists(LOGO_PATH):
+            logo_lbl.setPixmap(QPixmap(LOGO_PATH).scaled(140, 140, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        about_layout.addWidget(logo_lbl)
+
+        self.about_text_edit = QTextEdit()
+        self.about_text_edit.setReadOnly(True)
+        self.about_text_edit.setStyleSheet(f"background-color: {COLOR_BG}; color: {COLOR_TEXT}; border: 1px solid {COLOR_BORDER}; border-radius: 6px; font-family: monospace;")
+        about_layout.addWidget(self.about_text_edit, 1)
+
+        layout.addWidget(about_card, 1)
+
+        self.check_reboot = QCheckBox("Reboot system now automatically")
+        self.check_reboot.setChecked(True)
+        self.check_reboot.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))
+        layout.addWidget(self.check_reboot)
+
+        return page
+
+    def populate_about_details(self):
+        username = self.input_username.text()
+        hostname = self.input_hostname.text()
+        disk = self.disk_combo.currentData()
+        timezone = self.city_combo.currentData()
+
+        about_content = f"""=====================================================
+            ArcXos Linux Slim Edition
+=====================================================
+Lead Developer & Creator : Arunachalam
+Project Name             : ArcXos Linux OS
+Installation Type        : 100% Offline Standalone Deployment
+
+--- Installed System Configuration ---
+Target Disk Device       : {disk}
+Bootloader Mode          : {self.boot_mode} (GRUB)
+Configured Timezone      : {timezone}
+Primary User Account     : {username}
+Host System Name         : {hostname}
+Desktop Environment      : XFCE4 Dark Custom
+Kernel Package           : Hardened Linux (vmlinuz-linux)
+=====================================================
+Thank you for installing ArcXos Linux!
+"""
+        self.about_text_edit.setText(about_content)
+
+    # ==========================================
+    # Navigation Logic
+    # ==========================================
+    def go_next(self):
+        cur_idx = self.stacked_widget.currentIndex()
+
+        if cur_idx == 3: # Credentials -> Start Installing
+            # Confirm Passwords
+            p1 = self.input_pass.text()
+            p2 = self.input_pass_confirm.text()
+            if p1 != p2:
+                QMessageBox.warning(self, "Password Mismatch", "Passwords do not match. Please enter matching passwords.")
+                return
+
+            reply = QMessageBox.question(
+                self, "Confirm Installation",
+                "Are you ready to begin installation?\nTarget disk partitions will be modified.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self.stacked_widget.setCurrentIndex(4)
+                self.update_step_indicator(4)
+                self.start_installation()
+        elif cur_idx == 5: # Finish
+            if self.check_reboot.isChecked():
+                subprocess.run(["reboot"])
+            self.close()
+        else:
+            new_idx = cur_idx + 1
+            self.stacked_widget.setCurrentIndex(new_idx)
+            self.update_step_indicator(new_idx)
+
+    def go_back(self):
+        cur_idx = self.stacked_widget.currentIndex()
+        if cur_idx > 0:
+            new_idx = cur_idx - 1
+            self.stacked_widget.setCurrentIndex(new_idx)
+            self.update_step_indicator(new_idx)
+
+
+def main():
+    if os.geteuid() != 0:
+        print("[!] Error: ArcXos Installer must be run as root (sudo arcxos-gui-installer).")
+        sys.exit(1)
+
+    app = QApplication(sys.argv)
+    window = ArcXosInstallerWindow()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

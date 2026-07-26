@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install ArcXos (CLI Terminal)
+Comment=Command Line Automated Terminal System Installer for ArcXos Linux
+Exec=sudo /usr/bin/arcxos-installer --cli
+Icon=/usr/share/backgrounds/arcxoslogo.png
+Terminal=true
+Categories=System;
+StartupNotify=true

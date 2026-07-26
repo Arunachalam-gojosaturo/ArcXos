@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Snort NIDS Setup & Configuration Helper
+echo "========================================================"
+echo "    Snort Network Intrusion Detection System (NIDS)"
+echo "========================================================"
+echo "[+] Snort NIDS Launcher & Rule Manager"
+echo "    To test Snort configuration on interface eth0:"
+echo "    sudo snort -A console -i eth0 -c /etc/snort/snort.conf"

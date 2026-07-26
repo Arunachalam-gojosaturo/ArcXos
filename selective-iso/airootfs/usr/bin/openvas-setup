@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# OpenVAS / Greenbone Vulnerability Management Setup Helper
+echo "========================================================"
+echo "    OpenVAS / Greenbone Vulnerability Management (GVM)"
+echo "========================================================"
+echo "[+] ArcXos Selective ISO OpenVAS Management Utility"
+echo "    OpenVAS / GVM components:"
+echo "    1. gvm-libs / openvas-scanner"
+echo "    2. gvmd / gsa (Greenbone Security Assistant)"
+echo ""
+echo "    To start or update OpenVAS feed:"
+echo "    sudo greenbone-feed-sync"
+echo "    sudo gvmd --create-user=admin --password=admin"
+echo "    sudo gvmd --start"

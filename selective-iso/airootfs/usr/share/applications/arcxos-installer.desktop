@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install ArcXos
+Comment=Automated dual-boot installer engine for ArcXos
+Exec=sudo /usr/bin/arcxos-installer
+Icon=system-software-install
+Terminal=true
+Categories=System;
+StartupNotify=true

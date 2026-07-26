@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Tenable Nessus Professional Setup Helper
+echo "========================================================"
+echo "    Tenable Nessus Professional Scanner Management"
+echo "========================================================"
+if [ "$EUID" -ne 0 ]; then
+  echo "[!] Please run as root (sudo nessus-setup)"
+  exit 1
+fi
+
+if systemctl is-active --quiet nessusd.service 2>/dev/null || [ -f "/opt/nessus/sbin/nessusd" ]; then
+  echo "[+] Nessus scanner service detected."
+  systemctl status nessusd.service
+  echo "[+] Access Nessus Web Console at: https://localhost:8834"
+else
+  echo "[*] Nessus daemon not running."
+  echo "    To initialize Nessus Professional Scanner:"
+  echo "    1. Start service: sudo systemctl start nessusd"
+  echo "    2. Open Web UI: https://localhost:8834"
+  echo "    3. Enter your Nessus Professional license key when prompted."
+fi

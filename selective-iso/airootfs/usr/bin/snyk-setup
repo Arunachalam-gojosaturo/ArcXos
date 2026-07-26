@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Snyk Security CLI Setup Helper
+echo "========================================================"
+echo "    Snyk Developer Security CLI Utility"
+echo "========================================================"
+if command -v snyk &>/dev/null; then
+  snyk --help
+else
+  echo "[*] Snyk CLI integration helper."
+  echo "    To authenticate Snyk CLI:"
+  echo "    snyk auth"
+  echo "    To scan local repository:"
+  echo "    snyk test"
+fi

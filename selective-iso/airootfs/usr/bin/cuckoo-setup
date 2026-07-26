@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Cuckoo Sandbox Setup & Management Helper
+echo "========================================================"
+echo "    Cuckoo Automated Malware Analysis Sandbox"
+echo "========================================================"
+echo "[+] Cuckoo Sandbox environment helper"
+echo "    1. Start Cuckoo daemon: cuckoo -d"
+echo "    2. Start Cuckoo web interface: cuckoo web --host 127.0.0.1 --port 8000"

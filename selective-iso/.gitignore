@@ -1,0 +1,7 @@
+# Ignored directories
+out/
+work/
+
+# Ignored patterns
+*.iso
+*.img

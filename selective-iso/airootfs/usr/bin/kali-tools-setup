@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Kali Linux Tools & Compatibility Setup Helper
+echo "========================================================"
+echo "    Kali Linux Toolset & Compatibility Integration"
+echo "========================================================"
+echo "[+] ArcXos Selective ISO integrates Kali Linux core security tools:"
+echo "    - Nmap, Wireshark, Metasploit, Aircrack-ng, Nikto,"
+echo "      John the Ripper, Hashcat, SQLMap, OWASP ZAP, Cuckoo, Snyk"
+echo ""
+echo "    All tools match Kali Linux default configurations and pathing."

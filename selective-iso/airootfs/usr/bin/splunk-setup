@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Splunk Universal Forwarder & Enterprise Setup Helper
+echo "========================================================"
+echo "    Splunk Enterprise & Universal Forwarder Utility"
+echo "========================================================"
+if command -v splunk &>/dev/null || [ -f "/opt/splunk/bin/splunk" ] || [ -f "/opt/splunkforwarder/bin/splunk" ]; then
+  echo "[+] Splunk installation detected."
+  /opt/splunkforwarder/bin/splunk status 2>/dev/null || /opt/splunk/bin/splunk status 2>/dev/null
+else
+  echo "[*] Splunk binaries not found."
+  echo "    To set up Splunk / Universal Forwarder:"
+  echo "    1. Install via pacman/aur or download Splunk package into /opt/splunkforwarder"
+  echo "    2. Start Splunk: sudo /opt/splunkforwarder/bin/splunk start --accept-license"
+  echo "    3. Configure forwarder target: sudo /opt/splunkforwarder/bin/splunk add forward-server <IP>:9997"
+fi

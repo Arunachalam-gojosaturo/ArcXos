@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install ArcXos (GUI)
+Comment=Standalone 100% Offline Graphical Installer for ArcXos Linux
+Exec=sudo /usr/bin/arcxos-gui-installer
+Icon=/usr/share/backgrounds/arcxoslogo.png
+Terminal=false
+Categories=System;
+StartupNotify=true

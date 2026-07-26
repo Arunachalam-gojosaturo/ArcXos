@@ -1,0 +1,526 @@
+#!/bin/bash
+# ArcXos Linux Automated System Installer
+# Sole purpose: Install ArcXos onto selected disks with dual boot support.
+
+# Terminal colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Clean up and exit function to keep terminal open on failure
+cleanup_and_exit() {
+    local exit_code=$1
+    if [ "$exit_code" -ne 0 ]; then
+        echo ""
+        log_error "Installation failed with exit code $exit_code."
+        read -rp "Press Enter to close this window..." dummy
+    else
+        echo ""
+        log_info "Installation completed successfully."
+        read -rp "Press Enter to close this window..." dummy
+    fi
+    exit "$exit_code"
+}
+
+# Helper to run critical commands with error handling
+run_cmd() {
+    log_info "Running: $1"
+    if eval "$1"; then
+        return 0
+    else
+        log_error "Command failed: $1"
+        cleanup_and_exit 1
+    fi
+}
+
+# Check Root Privileges
+if [ "$EUID" -ne 0 ]; then
+    log_error "Please run this installer as root (e.g., sudo arcxos-installer)."
+    cleanup_and_exit 1
+fi
+
+# Auto-launch GUI installer when X display is active
+if [ "${1:-}" != "--cli" ] && [ -n "${DISPLAY:-}" ] && [ -f /usr/bin/arcxos-gui-installer ]; then
+    if python3 -c "import PyQt6" &>/dev/null; then
+        exec /usr/bin/arcxos-gui-installer "$@"
+    fi
+fi
+
+
+# Print banner
+echo -e "${CYAN}"
+if [ -f /usr/share/arcxos/asciiart.txt ]; then
+    cat /usr/share/arcxos/asciiart.txt
+elif [ -f "$(dirname "$0")/asciiart.txt" ]; then
+    cat "$(dirname "$0")/asciiart.txt"
+elif [ -f "/home/arunachalam/blackarch-iso/slim-iso/asciiart.txt" ]; then
+    cat "/home/arunachalam/blackarch-iso/slim-iso/asciiart.txt"
+else
+    echo "    _                   __  __               ___               _        _ _             "
+    echo "   /_\  _ __ ___ _  _  _\ \/ /___ ___   _  _/ __| _  _ ___ _ _| |_ __ _| | |___ _ _     "
+    echo "  / _ \| '_ / __| || |  _\  // _ (_-<  | || \__ \| || (_-< _  |  _/ _\` | | / -_) '_|    "
+    echo " /_/ \_\_|  \___|\_,_|  /_/\_\___/__/   \_, |___/ \_,_/__/_|  |\__\__,_|_|_/\___|_|      "
+    echo "                                        |__/                                            "
+fi
+echo -e "${NC}"
+echo "========================================================================================="
+echo "                  ArcXos Linux Slim Edition - System Installer"
+echo "========================================================================================="
+echo ""
+
+# Detect Boot Mode
+BOOT_MODE="BIOS"
+if [ -d /sys/firmware/efi ]; then
+    BOOT_MODE="UEFI"
+fi
+log_info "Detected Boot Mode: $BOOT_MODE"
+
+# Helper to resolve partition naming
+get_partition_dev() {
+    local disk=$1
+    local part_num=$2
+    if [[ "$disk" =~ [0-9]$ ]]; then
+        echo "${disk}p${part_num}"
+    else
+        echo "${disk}${part_num}"
+    fi
+}
+
+# Select Disk
+log_info "Scanning for available disks..."
+mapfile -t disk_list < <(lsblk -dno NAME,SIZE,MODEL | grep -E 'sd|nvme|vd' || true)
+
+if [ ${#disk_list[@]} -eq 0 ]; then
+    log_error "No target disks detected! Exiting."
+    cleanup_and_exit 1
+fi
+
+echo "Available Disks:"
+for i in "${!disk_list[@]}"; do
+    echo -e "  [$i] /dev/${disk_list[$i]}"
+done
+
+read -rp "Select the disk for installation [0-$(( ${#disk_list[@]} - 1 ))]: " disk_idx
+if [[ ! "$disk_idx" =~ ^[0-9]+$ ]] || [ "$disk_idx" -ge "${#disk_list[@]}" ]; then
+    log_error "Invalid selection. Exiting."
+    cleanup_and_exit 1
+fi
+
+SELECTED_DISK_NAME=$(echo "${disk_list[$disk_idx]}" | awk '{print $1}')
+DISK="/dev/$SELECTED_DISK_NAME"
+log_info "Selected target disk: $DISK"
+
+# Safely unmount any active partitions on the disk to prevent "Device or resource busy"
+log_info "Safely unmounting any active mounts on $DISK..."
+umount -R /mnt 2>/dev/null || true
+mapfile -t parts_to_unmount < <(lsblk -lno NAME "$DISK" | grep -E "[0-9]+$" || true)
+for part in "${parts_to_unmount[@]}"; do
+    umount -f "/dev/$part" 2>/dev/null || true
+    swapoff "/dev/$part" 2>/dev/null || true
+done
+
+# Partitioning Methods
+echo ""
+echo "Choose Partitioning Method:"
+echo "  [1] Clean Install - Erase entire disk and install ArcXos"
+echo "  [2] Dual Boot - Use largest unallocated space (50-100GB scan)"
+echo "  [3] Manual Partitioning - Select existing partitions manually"
+read -rp "Enter choice [1-3]: " part_choice
+
+ROOT_PART=""
+BOOT_PART=""
+
+case "$part_choice" in
+    1)
+        # Erase entire disk
+        echo -e "${RED}WARNING: All data on $DISK will be permanently deleted!${NC}"
+        read -rp "Are you absolutely sure you want to continue? (type 'yes'): " confirm
+        if [ "$confirm" != "yes" ]; then
+            log_warn "Installation cancelled."
+            cleanup_and_exit 0
+        fi
+
+        log_info "Wiping partition table on $DISK..."
+        run_cmd "dd if=/dev/zero of=\"$DISK\" bs=512 count=100 conv=notrunc"
+        run_cmd "wipefs -a \"$DISK\""
+
+        if [ "$BOOT_MODE" = "UEFI" ]; then
+            log_info "Creating GPT partition table and partition layout (UEFI)..."
+            run_cmd "parted -s \"$DISK\" mklabel gpt"
+            run_cmd "parted -s \"$DISK\" mkpart primary fat32 1MiB 513MiB"
+            run_cmd "parted -s \"$DISK\" set 1 esp on"
+            run_cmd "parted -s \"$DISK\" mkpart primary ext4 513MiB 100%"
+            
+            run_cmd "partprobe \"$DISK\""
+            run_cmd "udevadm settle"
+
+            BOOT_PART=$(get_partition_dev "$DISK" 1)
+            ROOT_PART=$(get_partition_dev "$DISK" 2)
+            
+            log_info "Formatting boot partition ($BOOT_PART)..."
+            run_cmd "mkfs.fat -F 32 \"$BOOT_PART\""
+        else
+            log_info "Creating MBR partition table and partition layout (BIOS)..."
+            run_cmd "parted -s \"$DISK\" mklabel msdos"
+            run_cmd "parted -s \"$DISK\" mkpart primary ext4 1MiB 100%"
+            run_cmd "parted -s \"$DISK\" set 1 boot on"
+            
+            run_cmd "partprobe \"$DISK\""
+            run_cmd "udevadm settle"
+
+            ROOT_PART=$(get_partition_dev "$DISK" 1)
+        fi
+
+        log_info "Formatting root partition ($ROOT_PART)..."
+        run_cmd "mkfs.ext4 -F \"$ROOT_PART\""
+        ;;
+
+    2)
+        # Dual boot unallocated space
+        log_info "Scanning for contiguous unallocated space on $DISK..."
+        
+        largest_start=0
+        largest_sectors=0
+        largest_size_str=""
+
+        while read -r start end sectors size; do
+            if [[ "$start" =~ ^[0-9]+$ ]]; then
+                if [ "$sectors" -gt "$largest_sectors" ]; then
+                    largest_start=$start
+                    largest_sectors=$sectors
+                    largest_size_str=$size
+                fi
+            fi
+        done < <(sfdisk -F "$DISK" 2>/dev/null | awk '/^[ ]*[0-9]+/ {print $1, $2, $3, $4}' || true)
+
+        if [ "$largest_sectors" -eq 0 ]; then
+            log_error "No unallocated space found on $DISK! Choose another method."
+            cleanup_and_exit 1
+        fi
+
+        size_gb=$(( largest_sectors * 512 / 1024 / 1024 / 1024 ))
+        log_info "Found largest unallocated space of $largest_size_str ($size_gb GB)"
+
+        if [ "$size_gb" -lt 15 ]; then
+            log_warn "Unallocated space ($size_gb GB) is very small (recommended: > 20GB)."
+        fi
+
+        read -rp "Would you like to install ArcXos into this free space for dual boot? (y/n): " db_confirm
+        if [[ ! "$db_confirm" =~ ^[Yy]$ ]]; then
+            log_warn "Cancelled."
+            cleanup_and_exit 0
+        fi
+
+        log_info "Creating partition in the unallocated space..."
+        largest_end=$(( largest_start + largest_sectors - 1 ))
+        mapfile -t parts_before < <(lsblk -lno NAME "$DISK" | grep -E "[0-9]+$" || true)
+        run_cmd "parted -s \"$DISK\" mkpart primary ext4 \"${largest_start}s\" \"${largest_end}s\""
+        run_cmd "partprobe \"$DISK\""
+        run_cmd "udevadm settle"
+        sleep 1
+        mapfile -t parts_after < <(lsblk -lno NAME "$DISK" | grep -E "[0-9]+$" || true)
+
+        # Find newly created partition by comparing disk partition lists
+        for pa in "${parts_after[@]}"; do
+            found=0
+            for pb in "${parts_before[@]}"; do
+                if [ "$pa" = "$pb" ]; then
+                    found=1
+                    break
+                fi
+            done
+            if [ $found -eq 0 ]; then
+                ROOT_PART="/dev/$pa"
+                break
+            fi
+        done
+
+        # Fallback check if partition diff was not caught
+        if [ -z "$ROOT_PART" ]; then
+            for part in "${parts_after[@]}"; do
+                part_start=$(cat "/sys/class/block/$part/start" 2>/dev/null || true)
+                if [ "$part_start" = "$largest_start" ]; then
+                    ROOT_PART="/dev/$part"
+                    break
+                fi
+            done
+        fi
+
+        if [ -z "$ROOT_PART" ]; then
+            log_error "Failed to locate newly created partition. Exiting."
+            cleanup_and_exit 1
+        fi
+
+        log_info "Formatting new root partition ($ROOT_PART)..."
+        run_cmd "mkfs.ext4 -F \"$ROOT_PART\""
+
+        # UEFI specific setup for dual boot
+        if [ "$BOOT_MODE" = "UEFI" ]; then
+            log_info "Locating existing EFI System Partition (ESP)..."
+            mapfile -t efi_candidates < <(lsblk -lno NAME,FSTYPE "$DISK" | grep -i 'vfat' | awk '{print "/dev/"$1}' || true)
+            if [ ${#efi_candidates[@]} -eq 0 ]; then
+                log_error "No EFI System Partition (FAT32) found on $DISK. Dual-boot requires an ESP."
+                cleanup_and_exit 1
+            fi
+            
+            echo "Select the EFI system partition to mount to /boot/efi:"
+            for idx in "${!efi_candidates[@]}"; do
+                echo "  [$idx] ${efi_candidates[$idx]}"
+            done
+            read -rp "Select index [0-$(( ${#efi_candidates[@]} - 1 ))]: " efi_idx
+            if [[ ! "$efi_idx" =~ ^[0-9]+$ ]] || [ "$efi_idx" -ge "${#efi_candidates[@]}" ]; then
+                log_error "Invalid selection."
+                cleanup_and_exit 1
+            fi
+            BOOT_PART="${efi_candidates[$efi_idx]}"
+            log_info "Selected EFI System Partition: $BOOT_PART"
+        fi
+        ;;
+
+    3)
+        # Manual partitions
+        log_info "Listing available partitions on $DISK:"
+        mapfile -t part_list < <(lsblk -lno NAME,SIZE,FSTYPE "$DISK" | grep -E "[0-9]+" || true)
+        
+        if [ ${#part_list[@]} -eq 0 ]; then
+            log_error "No partitions found on $DISK."
+            cleanup_and_exit 1
+        fi
+
+        for idx in "${!part_list[@]}"; do
+            echo "  [$idx] /dev/${part_list[$idx]}"
+        done
+
+        read -rp "Select the index for the ROOT partition (/): " root_idx
+        if [[ ! "$root_idx" =~ ^[0-9]+$ ]] || [ "$root_idx" -ge "${#part_list[@]}" ]; then
+            log_error "Invalid selection."
+            cleanup_and_exit 1
+        fi
+        ROOT_PART="/dev/$(echo "${part_list[$root_idx]}" | awk '{print $1}')"
+        log_info "Selected ROOT partition: $ROOT_PART"
+
+        read -rp "Would you like to format this ROOT partition? (y/n): " format_root
+        if [[ "$format_root" =~ ^[Yy]$ ]]; then
+            log_info "Formatting root partition ($ROOT_PART)..."
+            run_cmd "mkfs.ext4 -F \"$ROOT_PART\""
+        fi
+
+        if [ "$BOOT_MODE" = "UEFI" ]; then
+            read -rp "Select the index for the EFI / Boot partition: " boot_idx
+            if [[ ! "$boot_idx" =~ ^[0-9]+$ ]] || [ "$boot_idx" -ge "${#part_list[@]}" ]; then
+                log_error "Invalid selection."
+                cleanup_and_exit 1
+            fi
+            BOOT_PART="/dev/$(echo "${part_list[$boot_idx]}" | awk '{print $1}')"
+            log_info "Selected BOOT partition: $BOOT_PART"
+        fi
+        ;;
+
+    *)
+        log_error "Invalid selection. Exiting."
+        cleanup_and_exit 1
+        ;;
+esac
+
+# Mount target filesystems
+log_info "Mounting target partitions..."
+run_cmd "mount \"$ROOT_PART\" /mnt"
+
+if [ -n "$BOOT_PART" ]; then
+    run_cmd "mkdir -p /mnt/boot/efi"
+    run_cmd "mount \"$BOOT_PART\" /mnt/boot/efi"
+fi
+
+# User Account Setup
+echo ""
+echo "=== Configure User Account ==="
+read -rp "Enter username for the new system: " NEW_USER
+while [[ -z "$NEW_USER" ]]; do
+    read -rp "Username cannot be empty. Enter username: " NEW_USER
+done
+
+read -rsp "Enter password for $NEW_USER: " NEW_PASSWORD
+echo ""
+read -rsp "Confirm password: " NEW_PASSWORD_CONFIRM
+echo ""
+
+if [ "$NEW_PASSWORD" != "$NEW_PASSWORD_CONFIRM" ]; then
+    log_error "Passwords do not match."
+    cleanup_and_exit 1
+fi
+
+# Deploy System Files
+log_info "Initializing base system with pacstrap..."
+# Attempt to run pacstrap.
+if pacstrap -K /mnt base base-devel linux linux-firmware intel-ucode amd-ucode efibootmgr grub os-prober ntfs-3g networkmanager xfce4 xfce4-goodies lightdm lightdm-gtk-greeter sudo zsh rsync yay reflector; then
+    log_info "pacstrap completed successfully."
+else
+    log_warn "pacstrap completed with errors or offline; syncing files directly from live environment."
+fi
+
+log_info "Syncing ArcXos live system custom configurations, packages and profiles..."
+run_cmd "rsync -aAXv --exclude='/dev/*' --exclude='/proc/*' --exclude='/sys/*' --exclude='/tmp/*' --exclude='/run/*' --exclude='/mnt/*' --exclude='/media/*' --exclude='/lost+found' --exclude='/boot/efi/*' --exclude='/boot/grub/*' --exclude='/etc/fstab' --exclude='/etc/resolv.conf' / /mnt/"
+
+# Ensure kernel and initramfs files exist in /mnt/boot regardless of pacstrap status
+if [ ! -f /mnt/boot/vmlinuz-linux ]; then
+    log_info "Copying kernel and microcode files from live system to target boot partition..."
+    cp -af /boot/vmlinuz-linux /mnt/boot/ 2>/dev/null || true
+    cp -af /boot/initramfs*.img /mnt/boot/ 2>/dev/null || true
+    cp -af /boot/*.img /mnt/boot/ 2>/dev/null || true
+fi
+
+log_info "Generating fstab..."
+run_cmd "genfstab -U /mnt > /mnt/etc/fstab"
+
+# Post-install Chroot configuration
+log_info "Configuring system settings (Chroot)..."
+
+# Machine ID setup
+log_info "Setting up unique machine-id..."
+rm -f /mnt/etc/machine-id /mnt/var/lib/dbus/machine-id
+run_cmd "arch-chroot /mnt systemd-machine-id-setup"
+
+# Journald setup
+log_info "Configuring journald for persistent disk storage..."
+sed -i 's/Storage=volatile/Storage=auto/' /mnt/etc/systemd/journald.conf 2>/dev/null || true
+sed -i 's/#Storage=auto/Storage=auto/' /mnt/etc/systemd/journald.conf 2>/dev/null || true
+
+# Locale & Timezone
+run_cmd "arch-chroot /mnt ln -sf /usr/share/zoneinfo/UTC /etc/localtime"
+run_cmd "arch-chroot /mnt hwclock --systohc"
+run_cmd "sed -i 's/#\(en_US\.UTF-8\)/\1/' /mnt/etc/locale.gen"
+run_cmd "arch-chroot /mnt locale-gen"
+echo "LANG=en_US.UTF-8" > /mnt/etc/locale.conf
+
+# Hostname
+echo "arcxos" > /mnt/etc/hostname
+echo -e "127.0.0.1\tlocalhost\n::1\t\tlocalhost\n127.0.1.1\tarcxos.localdomain\tarcxos" > /mnt/etc/hosts
+
+# Enable essential user services
+run_cmd "arch-chroot /mnt systemctl enable NetworkManager lightdm"
+
+# Create User
+log_info "Setting up user $NEW_USER..."
+# Check if user already exists from live environment sync, if so, delete it first to avoid conflicts
+if arch-chroot /mnt id "$NEW_USER" &>/dev/null; then
+    run_cmd "arch-chroot /mnt userdel -r \"$NEW_USER\""
+fi
+# Remove the default liveuser if present in the target system to keep it clean
+if arch-chroot /mnt id "liveuser" &>/dev/null; then
+    run_cmd "arch-chroot /mnt userdel -r \"liveuser\""
+fi
+
+run_cmd "arch-chroot /mnt useradd -m -g users -G wheel,power,audio,video,storage -s /bin/zsh \"$NEW_USER\""
+echo "$NEW_USER:$NEW_PASSWORD" | arch-chroot /mnt chpasswd
+echo "root:$NEW_PASSWORD" | arch-chroot /mnt chpasswd
+
+# Setup Sudo
+echo "%wheel ALL=(ALL:ALL) ALL" >> /mnt/etc/sudoers
+
+# Correct mkinitcpio.conf and linux.preset for the installed system
+log_info "Configuring mkinitcpio.conf and linux.preset for the target system..."
+cat << 'EOF' > /mnt/etc/mkinitcpio.conf
+# Target system mkinitcpio.conf (Generated by ArcXos Installer)
+MODULES=(amdgpu radeon nouveau i915)
+BINARIES=()
+FILES=()
+HOOKS=(base udev autodetect modconf kms block filesystems keyboard fsck)
+COMPRESSION="zstd"
+EOF
+
+cat << 'EOF' > /mnt/etc/mkinitcpio.d/linux.preset
+# mkinitcpio preset file for the 'linux' package
+PRESETS=('default' 'fallback')
+
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="/boot/vmlinuz-linux"
+
+default_image="/boot/initramfs-linux.img"
+fallback_image="/boot/initramfs-linux-fallback.img"
+fallback_options="-S autodetect"
+EOF
+
+# Regenerate initramfs
+log_info "Regenerating initramfs for the target system..."
+run_cmd "arch-chroot /mnt mkinitcpio -P"
+
+# Disable live-only & delay-causing services on target system
+log_info "Cleaning up live-only and delay-causing services..."
+run_cmd "arch-chroot /mnt systemctl disable choose-mirror.service pacman-init.service etc-pacman.d-gnupg.mount vboxservice.service NetworkManager-wait-online.service systemd-networkd-wait-online.service || true"
+run_cmd "rm -f /mnt/etc/systemd/system/choose-mirror.service"
+run_cmd "rm -f /mnt/etc/systemd/system/pacman-init.service"
+run_cmd "rm -f /mnt/etc/systemd/system/etc-pacman.d-gnupg.mount"
+run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/choose-mirror.service"
+run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/pacman-init.service"
+run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/etc-pacman.d-gnupg.mount"
+run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/vboxservice.service"
+run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/NetworkManager-wait-online.service"
+run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/systemd-networkd-wait-online.service"
+
+# Install Bootloader (GRUB)
+log_info "Configuring GRUB Bootloader..."
+cat << 'EOF' > /mnt/etc/default/grub
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="ArcXos"
+GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"
+GRUB_CMDLINE_LINUX=""
+GRUB_PRELOAD_MODULES="part_gpt part_msdos ext2 fat search search_fs_uuid"
+GRUB_DISABLE_OS_PROBER=false
+GRUB_TIMEOUT_STYLE=menu
+GRUB_TERMINAL_INPUT=console
+GRUB_GFXMODE=auto
+GRUB_GFXPAYLOAD_LINUX=keep
+GRUB_DISABLE_RECOVERY=true
+GRUB_COLOR_NORMAL="light-blue/black"
+GRUB_COLOR_HIGHLIGHT="light-cyan/blue"
+GRUB_BACKGROUND="/usr/share/backgrounds/splash.png"
+EOF
+
+if [ "$BOOT_MODE" = "UEFI" ]; then
+    log_info "Installing UEFI GRUB bootloader..."
+    run_cmd "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ArcXos --recheck"
+    run_cmd "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable"
+else
+    log_info "Installing BIOS GRUB bootloader on $DISK..."
+    run_cmd "arch-chroot /mnt grub-install --target=i386-pc \"$DISK\""
+fi
+
+log_info "Generating GRUB configuration (detecting installed OSes & Windows)..."
+run_cmd "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
+
+# Clean up
+log_info "Unmounting filesystems..."
+umount -R /mnt
+
+echo ""
+echo -e "${GREEN}"
+if [ -f /usr/share/arcxos/asciiartend.txt ]; then
+    cat /usr/share/arcxos/asciiartend.txt
+elif [ -f "$(dirname "$0")/asciiartend.txt" ]; then
+    cat "$(dirname "$0")/asciiartend.txt"
+elif [ -f "/home/arunachalam/blackarch-iso/slim-iso/asciiartend.txt" ]; then
+    cat "/home/arunachalam/blackarch-iso/slim-iso/asciiartend.txt"
+fi
+echo -e "${NC}"
+echo -e "${GREEN}======================================================${NC}"
+echo -e "${GREEN}      ArcXos Linux Slim Edition installed successfully!${NC}"
+echo -e "${GREEN}======================================================${NC}"
+echo "You can now reboot and remove the live media to boot into ArcXos."
+cleanup_and_exit 0
