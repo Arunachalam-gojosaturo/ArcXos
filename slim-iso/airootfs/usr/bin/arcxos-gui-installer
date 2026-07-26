@@ -178,15 +178,17 @@ class WorldMapWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(280)
+        self.setMinimumHeight(320)
         self.selected_city = CITIES_DB[0] # Default: India
         self.setMouseTracking(True)
         self.hovered_city = None
+        self.custom_target_point = None
 
     def set_selected_city_by_zone(self, zone_name):
         for c in CITIES_DB:
             if c["zone"] == zone_name:
                 self.selected_city = c
+                self.custom_target_point = None
                 self.update()
                 break
 
@@ -196,22 +198,25 @@ class WorldMapWidget(QWidget):
         click_x = event.position().x()
         click_y = event.position().y()
 
+        # Convert screen coords (x,y) to (lon, lat)
+        click_lon = (click_x / w) * 360.0 - 180.0
+        click_lat = 90.0 - (click_y / h) * 180.0
+
         closest_city = None
         min_dist = 999999
 
         for c in CITIES_DB:
-            # Map lon (-180..180) -> (0..w)
-            cx = (c["lon"] + 180) * (w / 360.0)
-            # Map lat (90..-90) -> (0..h)
-            cy = (90 - c["lat"]) * (h / 180.0)
-
-            dist = math.hypot(click_x - cx, click_y - cy)
+            # Spherical distance estimation
+            dlon = c["lon"] - click_lon
+            dlat = c["lat"] - click_lat
+            dist = math.hypot(dlon, dlat)
             if dist < min_dist:
                 min_dist = dist
                 closest_city = c
 
-        if closest_city and min_dist < 50:
+        if closest_city:
             self.selected_city = closest_city
+            self.custom_target_point = (click_lon, click_lat)
             self.timezoneSelected.emit(closest_city["city"], closest_city["zone"])
             self.update()
 
@@ -232,7 +237,7 @@ class WorldMapWidget(QWidget):
                 min_d = d
                 closest = c
 
-        if closest and min_d < 35:
+        if closest and min_d < 40:
             if self.hovered_city != closest:
                 self.hovered_city = closest
                 self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -252,12 +257,13 @@ class WorldMapWidget(QWidget):
 
         # Deep Cyber Ocean Background Gradient
         grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0, QColor("#080c14"))
-        grad.setColorAt(1, QColor("#111a28"))
+        grad.setColorAt(0, QColor("#060a12"))
+        grad.setColorAt(0.5, QColor("#0a101d"))
+        grad.setColorAt(1, QColor("#070d18"))
         painter.fillRect(0, 0, w, h, grad)
 
-        # Draw Grid Lines
-        grid_pen = QPen(QColor("#1c293d"), 1, Qt.PenStyle.DotLine)
+        # Draw Grid Lines & Lat/Lon Degree Markings
+        grid_pen = QPen(QColor("#182538"), 1, Qt.PenStyle.DotLine)
         painter.setPen(grid_pen)
 
         for lon in range(-180, 181, 30):
@@ -268,36 +274,61 @@ class WorldMapWidget(QWidget):
             y = (90 - lat) * (h / 180.0)
             painter.drawLine(0, int(y), w, int(y))
 
-        # Equator & Prime Meridian Lines
+        # Equator & Prime Meridian Highlight Lines
         eq_y = (90 - 0) * (h / 180.0)
         pm_x = (0 + 180) * (w / 360.0)
-        painter.setPen(QPen(QColor("#2d4365"), 1, Qt.PenStyle.SolidLine))
+        painter.setPen(QPen(QColor("#1f3554"), 1, Qt.PenStyle.SolidLine))
         painter.drawLine(0, int(eq_y), w, int(eq_y))
         painter.drawLine(int(pm_x), 0, int(pm_x), h)
 
-        # Landmass Map Shapes (High-fidelity continent representations)
-        painter.setPen(QPen(QColor("#2c3e56"), 1))
-        painter.setBrush(QBrush(QColor("#1b2738")))
+        # Tropics of Cancer & Capricorn (23.5 N & 23.5 S)
+        cancer_y = (90 - 23.5) * (h / 180.0)
+        capricorn_y = (90 - (-23.5)) * (h / 180.0)
+        painter.setPen(QPen(QColor("#15253b"), 1, Qt.PenStyle.DashLine))
+        painter.drawLine(0, int(cancer_y), w, int(cancer_y))
+        painter.drawLine(0, int(capricorn_y), w, int(capricorn_y))
+
+        # High-Fidelity Detailed World Map Coastlines & Continents
+        painter.setPen(QPen(QColor("#2d4568"), 1))
+        painter.setBrush(QBrush(QColor("#172336")))
 
         continents = [
-            # North America
-            [(-165, 65), (-140, 70), (-100, 75), (-60, 60), (-80, 30), (-105, 20), (-120, 35), (-165, 65)],
+            # North America Main & Alaska
+            [(-168, 65), (-165, 70), (-140, 70), (-130, 55), (-125, 50), (-124, 40), (-117, 32), (-105, 20), (-90, 16), (-90, 20), (-97, 26), (-95, 30), (-88, 30), (-82, 25), (-80, 30), (-75, 35), (-70, 42), (-65, 45), (-64, 47), (-60, 60), (-75, 62), (-80, 65), (-95, 70), (-120, 72), (-168, 65)],
+            # Central America
+            [(-105, 20), (-92, 14), (-88, 13), (-83, 9), (-77, 8), (-80, 15), (-90, 17), (-105, 20)],
             # South America
-            [(-80, 10), (-40, -5), (-35, -20), (-60, -55), (-75, -45), (-80, 10)],
-            # Europe
-            [(-10, 60), (30, 70), (45, 50), (25, 35), (-10, 35), (-10, 60)],
-            # Africa
-            [(-15, 35), (35, 30), (50, 10), (40, -35), (20, -35), (-15, 10), (-15, 35)],
-            # Asia / Eurasia
-            [(30, 70), (140, 70), (170, 60), (140, 30), (100, 10), (70, 10), (45, 35), (30, 70)],
+            [(-77, 8), (-73, 11), (-60, 10), (-50, 0), (-35, -5), (-35, -12), (-40, -22), (-50, -30), (-65, -54), (-75, -50), (-72, -35), (-75, -15), (-80, -2), (-77, 8)],
+            # Western & Central Europe
+            [(-9, 36), (-9, 43), (-2, 43), (-5, 48), (2, 51), (8, 54), (10, 58), (20, 55), (30, 60), (30, 45), (25, 40), (22, 38), (15, 40), (12, 44), (9, 44), (3, 43), (-3, 37), (-9, 36)],
+            # British Isles (UK & Ireland)
+            [(-10, 51), (-10, 55), (-6, 58), (-3, 58), (1, 52), (-5, 50), (-10, 51)],
+            [(-10, 52), (-10, 55), (-6, 55), (-6, 52), (-10, 52)],
+            # Scandinavia
+            [(5, 58), (10, 63), (18, 70), (28, 70), (30, 65), (22, 60), (12, 56), (5, 58)],
+            # Africa Main
+            [(-17, 15), (-17, 21), (-6, 36), (11, 37), (25, 32), (34, 27), (43, 12), (51, 11), (40, -3), (35, -25), (20, -35), (15, -30), (12, -15), (8, 4), (-8, 4), (-15, 11), (-17, 15)],
+            # Eurasia (Middle East, Russia, Asia Main)
+            [(35, 30), (45, 40), (50, 40), (60, 55), (70, 70), (100, 75), (140, 72), (170, 66), (180, 65), (160, 55), (140, 40), (120, 30), (110, 20), (105, 10), (100, 4), (98, 10), (92, 20), (88, 22), (68, 24), (60, 25), (55, 25), (50, 15), (43, 12), (35, 30)],
             # India Subcontinent
-            [(68, 25), (88, 25), (80, 8), (68, 25)],
-            # Australia
-            [(115, -15), (150, -15), (150, -38), (115, -38)],
+            [(68, 24), (73, 20), (76, 15), (77, 8), (80, 13), (85, 20), (88, 22), (68, 24)],
+            # Sri Lanka
+            [(80, 10), (82, 10), (81, 6), (80, 6), (80, 10)],
+            # Japan Archipelago
+            [(130, 32), (133, 35), (140, 36), (142, 44), (145, 44), (140, 36), (130, 32)],
+            # Australia & Tasmania
+            [(114, -22), (114, -34), (138, -35), (153, -28), (152, -15), (142, -11), (136, -15), (129, -15), (114, -22)],
+            [(144, -40), (148, -40), (148, -44), (144, -44), (144, -40)],
+            # New Zealand
+            [(172, -34), (178, -38), (174, -42), (172, -34)],
+            [(166, -46), (174, -41), (170, -46), (166, -46)],
             # Greenland
-            [(-60, 80), (-20, 82), (-30, 65), (-55, 65)],
-            # Japan
-            [(130, 42), (145, 42), (140, 30), (130, 30)]
+            [(-55, 60), (-40, 60), (-20, 70), (-18, 80), (-40, 83), (-60, 78), (-55, 60)],
+            # Madagascar
+            [(44, -12), (50, -15), (47, -25), (43, -25), (44, -12)],
+            # Indonesia / Philippines
+            [(95, 5), (105, -5), (115, -8), (125, -8), (140, -3), (150, -10), (140, -2), (125, 2), (105, 5), (95, 5)],
+            [(120, 18), (126, 12), (125, 6), (120, 10), (120, 18)]
         ]
 
         for poly in continents:
@@ -308,7 +339,7 @@ class WorldMapWidget(QWidget):
                 pts.append(QPointF(wx, wy))
             painter.drawPolygon(pts)
 
-        # Draw Country & City Pins
+        # Draw City Pins & Selection Target
         for c in CITIES_DB:
             cx = (c["lon"] + 180) * (w / 360.0)
             cy = (90 - c["lat"]) * (h / 180.0)
@@ -317,54 +348,80 @@ class WorldMapWidget(QWidget):
             is_hovered = (c == self.hovered_city)
 
             if is_selected:
-                # Glowing Neon Target Pulsar
-                rad = QRadialGradient(cx, cy, 24)
-                rad.setColorAt(0, QColor(0, 243, 255, 220))
-                rad.setColorAt(0.6, QColor(0, 243, 255, 80))
+                # Target Pulse Rings
+                rad = QRadialGradient(cx, cy, 26)
+                rad.setColorAt(0, QColor(0, 243, 255, 240))
+                rad.setColorAt(0.5, QColor(0, 243, 255, 90))
                 rad.setColorAt(1, QColor(0, 243, 255, 0))
                 painter.setBrush(QBrush(rad))
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawEllipse(QPointF(cx, cy), 24, 24)
+                painter.drawEllipse(QPointF(cx, cy), 26, 26)
 
-                painter.setBrush(QBrush(QColor(COLOR_PRIMARY)))
-                painter.setPen(QPen(QColor("#ffffff"), 2))
-                painter.drawEllipse(QPointF(cx, cy), 7, 7)
+                # Crosshair reticle lines
+                painter.setPen(QPen(QColor("#00f3ff"), 1, Qt.PenStyle.SolidLine))
+                painter.drawLine(int(cx - 16), int(cy), int(cx + 16), int(cy))
+                painter.drawLine(int(cx), int(cy - 16), int(cx), int(cy + 16))
 
-                # Floating Location Tag
-                painter.setPen(QPen(QColor("#ffffff")))
+                painter.setBrush(QBrush(QColor("#ffffff")))
+                painter.setPen(QPen(QColor("#00f3ff"), 2))
+                painter.drawEllipse(QPointF(cx, cy), 5, 5)
+
+                # HUD Tag Window
                 painter.setFont(QFont(FONT_FAMILY, 9, QFont.Weight.Bold))
                 tag_text = f"📍 {c['city']} [{c['zone']}]"
-                
-                # Tag Background rect
                 metrics = painter.fontMetrics()
-                tw = metrics.horizontalAdvance(tag_text) + 12
-                th = 20
-                rect_x = int(cx) + 10
-                rect_y = int(cy) - 22
+                tw = metrics.horizontalAdvance(tag_text) + 16
+                th = 22
+                rect_x = int(cx) + 12
+                rect_y = int(cy) - 24
                 if rect_x + tw > w - 10:
-                    rect_x = int(cx) - tw - 10
+                    rect_x = int(cx) - tw - 12
+                if rect_y < 10:
+                    rect_y = int(cy) + 12
 
-                painter.setBrush(QBrush(QColor("#0d131f")))
-                painter.setPen(QPen(QColor(COLOR_PRIMARY), 1))
+                painter.setBrush(QBrush(QColor("#09101c")))
+                painter.setPen(QPen(QColor("#00f3ff"), 1))
                 painter.drawRoundedRect(rect_x, rect_y, tw, th, 4, 4)
 
                 painter.setPen(QPen(QColor("#ffffff")))
-                painter.drawText(rect_x + 6, rect_y + 14, tag_text)
+                painter.drawText(rect_x + 8, rect_y + 15, tag_text)
 
             elif is_hovered:
-                painter.setBrush(QBrush(QColor(COLOR_PRIMARY_HOVER)))
+                painter.setBrush(QBrush(QColor("#33f6ff")))
                 painter.setPen(QPen(QColor("#ffffff"), 1))
                 painter.drawEllipse(QPointF(cx, cy), 6, 6)
 
                 painter.setFont(QFont(FONT_FAMILY, 8))
-                painter.setPen(QPen(QColor(COLOR_PRIMARY)))
-                painter.drawText(int(cx) + 8, int(cy) - 5, c["city"])
-            else:
-                painter.setBrush(QBrush(QColor("#4e6587")))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawEllipse(QPointF(cx, cy), 3, 3)
+                painter.setPen(QPen(QColor("#00f3ff")))
+                painter.drawText(int(cx) + 8, int(cy) + 4, c["city"].split("(")[0].strip())
 
-        painter.end()
+            else:
+                painter.setBrush(QBrush(QColor("#7928ca")))
+                painter.setPen(QPen(QColor("#00f3ff"), 1))
+                painter.drawEllipse(QPointF(cx, cy), 3.5, 3.5)
+
+        # Draw Custom Click Marker if user clicked on specific coordinates
+        if self.custom_target_point:
+            clon, clat = self.custom_target_point
+            t_x = (clon + 180) * (w / 360.0)
+            t_y = (90 - clat) * (h / 180.0)
+
+            # Draw target pin
+            painter.setPen(QPen(QColor("#ffd700"), 1.5, Qt.PenStyle.DashLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QPointF(t_x, t_y), 12, 12)
+            painter.drawLine(int(t_x - 16), int(t_y), int(t_x + 16), int(t_y))
+            painter.drawLine(int(t_x), int(t_y - 16), int(t_x), int(t_y + 16))
+
+        # Bottom HUD Status Overlay Bar
+        painter.setBrush(QBrush(QColor(10, 16, 28, 220)))
+        painter.setPen(QPen(QColor("#1f3554"), 1))
+        painter.drawRect(0, h - 26, w, 26)
+
+        painter.setFont(QFont(FONT_FAMILY, 8, QFont.Weight.Bold))
+        painter.setPen(QPen(QColor("#00f3ff")))
+        hud_info = f"SELECTED: {self.selected_city['city']} ({self.selected_city['zone']}) | LAT: {self.selected_city['lat']}° | LON: {self.selected_city['lon']}° | MIRROR: https://geo.mirror.pkgbuild.com"
+        painter.drawText(10, h - 8, hud_info)
 
 
 # ==========================================
