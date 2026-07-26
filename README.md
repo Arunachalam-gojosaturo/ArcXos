@@ -1,19 +1,81 @@
-# <p align="center"><img src="slim-iso/airootfs/usr/share/backgrounds/arcxoslogo.png" alt="ArcXos Logo" width="220"/><br>ArcXos Linux</p>
+# <p align="center"><img src="slim-iso/airootfs/usr/share/backgrounds/arcxoslogo.png" alt="ArcXos Logo" width="240"/><br>ArcXos Linux</p>
 
 <p align="center">
+  <img src="slim-iso/airootfs/usr/share/backgrounds/background.png" alt="ArcXos Linux Header Banner" width="100%"/>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Arunachalam-gojosaturo/ArcXos"><img src="https://img.shields.io/badge/Project-ArcXos_Linux-red?style=for-the-badge&logo=linux&logoColor=white" alt="ArcXos Linux"/></a>
   <a href="https://archlinux.org"><img src="https://img.shields.io/badge/Base-Arch_Linux-1793D1?style=for-the-badge&logo=arch-linux&logoColor=white" alt="Arch Linux Base"/></a>
-  <a href="https://blackarch.org"><img src="https://img.shields.io/badge/Security-BlackArch_Repo-800000?style=for-the-badge&logo=gnu-linux&logoColor=white" alt="BlackArch Repo"/></a>
+  <a href="https://blackarch.org"><img src="https://img.shields.io/badge/Compatible-BlackArch_Repo-800000?style=for-the-badge&logo=gnu-linux&logoColor=white" alt="BlackArch Repo Compatible"/></a>
   <a href="#"><img src="https://img.shields.io/badge/Arch-x86__64-brightgreen?style=for-the-badge&logo=cpu" alt="x86_64"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0"/></a>
 </p>
+
+> [!NOTE]
+> **ArcXos Linux** is an independent, custom-built Arch Linux live distribution pre-configured with BlackArch security tools and custom desktop aesthetics. **This repository is the official home of ArcXos Linux build profiles, not the upstream BlackArch Linux organization repository.**
 
 ---
 
 ## 🛡️ Overview
 
-**ArcXos Linux** is a high-performance, lightweight, and custom-tailored security auditing, ethical hacking, and penetration testing distribution built on top of **Arch Linux** and **BlackArch Linux**.
+**ArcXos Linux** is a high-performance, lightweight, and custom-tailored security auditing, ethical hacking, and penetration testing distribution built on top of **Arch Linux** with **BlackArch Linux** repository compatibility.
 
-Designed for security professionals, red teamers, malware analysts, and security enthusiasts, ArcXos delivers a fast, stable desktop experience with custom cybersecurity wallpapers, custom GUI/CLI installers, modular build profiles, and curated tool suites.
+Designed for security professionals, red teamers, malware analysts, and ethical hacking enthusiasts, ArcXos delivers a fast, stable desktop experience with custom cybersecurity wallpapers, custom GUI/CLI installers, modular build profiles, and curated tool suites out-of-the-box.
+
+---
+
+## 🖼️ ArcXos Wallpaper Showcase
+
+ArcXos comes pre-loaded with an exclusive collection of high-resolution cyber security, hacker, and minimalist desktop wallpapers under `airootfs/usr/share/backgrounds/`:
+
+<table>
+  <tr>
+    <td width="50%">
+      <p align="center"><b>ArcXos Cyber Blue Theme</b></p>
+      <img src="slim-iso/airootfs/usr/share/backgrounds/Blue_cyber_theme_wallpaper_ARCXOS_202607261041.jpeg" alt="ArcXos Cyber Blue Theme" width="100%"/>
+    </td>
+    <td width="50%">
+      <p align="center"><b>ArcXos Holographic Cyber Theme</b></p>
+      <img src="slim-iso/airootfs/usr/share/backgrounds/Cyber_wallpaper_ARCXOS_OS_theme_202607261055.jpeg" alt="ArcXos Holographic Theme" width="100%"/>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <p align="center"><b>Green Hacker Theme</b></p>
+      <img src="slim-iso/airootfs/usr/share/backgrounds/Green_hacker_wallpaper_ARCXOS_OS_202607261052.jpeg" alt="Green Hacker Theme" width="100%"/>
+    </td>
+    <td width="50%">
+      <p align="center"><b>Woman with ARCXOS Theme</b></p>
+      <img src="slim-iso/airootfs/usr/share/backgrounds/Woman_with_ARCXOS_text_2K_202607261040.jpeg" alt="Woman with ARCXOS Theme" width="100%"/>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <p align="center"><b>Hack The Planet</b></p>
+      <img src="slim-iso/airootfs/usr/share/backgrounds/hacktheplanet.png" alt="Hack The Planet" width="100%"/>
+    </td>
+    <td width="50%">
+      <p align="center"><b>YOR Cyber Art</b></p>
+      <img src="slim-iso/airootfs/usr/share/backgrounds/YOR.jpg" alt="YOR Cyber Art" width="100%"/>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <p align="center"><b>4K Minimalist Scenery</b></p>
+      <img src="slim-iso/airootfs/usr/share/backgrounds/wall-4k.png" alt="4K Minimalist Scenery" width="100%"/>
+    </td>
+    <td width="50%">
+      <p align="center"><b>Hoodie Hacker</b></p>
+      <img src="slim-iso/airootfs/usr/share/backgrounds/hoodie.png" alt="Hoodie Hacker" width="100%"/>
+    </td>
+  </tr>
+</table>
+
+Custom wallpaper switcher terminal utility:
+```bash
+arcxos-set-wallpaper
+```
 
 ---
 
@@ -21,7 +83,7 @@ Designed for security professionals, red teamers, malware analysts, and security
 
 - **🚀 Customized Desktop Environments**: LightDM GTK greeter with XFCE4, Awesome WM, and Openbox desktop configurations.
 - **🎨 Custom Cyber Aesthetics**: Includes exclusive custom ArcXos wallpapers, dark themes, custom icons, and automated wallpaper setting scripts.
-- **🛠️ Integrated Installers**: Built-in CLI and GUI installers (`arcxos-installer`, `arcxos-gui-installer`) for easy installation.
+- **🛠️ Integrated Installers**: Built-in CLI and GUI installers (`arcxos-installer`, `arcxos-gui-installer`) for easy installation to disk.
 - **📦 Modular Distribution Profiles**:
   - **Slim Edition (`slim-iso`)**: Fast & lightweight footprint featuring XFCE4, LightDM, and essential pentesting suites.
   - **Selective Edition (`selective-iso`)**: Specialized environment equipped with modular deployment scripts for top enterprise security suites.
@@ -37,7 +99,7 @@ Designed for security professionals, red teamers, malware analysts, and security
 | :--- | :---: | :---: | :---: | :---: |
 | **Desktop Environment** | XFCE4 + LightDM | XFCE4 + LightDM | XFCE4 / Openbox | CLI / Minimal |
 | **Target Use Case** | Fast Audits & Live Use | Enterprise & Custom Suites | Complete PenTesting | Custom Network Installs |
-| **Tool Footprint** | Essential Pentesting | Modular / Category Scripts | 2800+ BlackArch Tools | Minimal Bootstrap |
+| **Tool Footprint** | Essential Pentesting | Modular / Category Scripts | 2800+ Security Tools | Minimal Bootstrap |
 | **Installers Included** | GUI + CLI Installer | Modular Setup + CLI | Standard Archiso | Netinstall Bootstrap |
 | **Recommended Storage** | 16 GB+ | 32 GB+ | 64 GB+ | 10 GB+ |
 
@@ -62,7 +124,7 @@ ArcXos/
 │   ├── packages.x86_64 # Selective package list
 │   └── profiledef.sh   # Profile metadata and permission settings
 │
-├── full-iso/           # Full ISO Edition (Complete BlackArch Pentesting Suite)
+├── full-iso/           # Full ISO Edition (Complete Pentesting Toolset Profile)
 ├── netinstall-iso/     # Network installation minimal bootstrap edition
 ├── tools/              # ISO compilation scripts, menu generators, and build tools
 ├── misc/               # Minimal testing configs, disabled tool lists, and package templates
@@ -134,24 +196,6 @@ The compiled `.iso` image will be saved inside the `out/` folder.
 
 ---
 
-## 🎨 Aesthetic & Desktop Customization
-
-ArcXos features custom-crafted cyber security wallpapers located under `airootfs/usr/share/backgrounds/`:
-
-- `background.png` & `blackarch.png` (Default system wallpaper symlinks)
-- `Blue_cyber_theme_wallpaper_ARCXOS.jpeg`
-- `Cyber_wallpaper_ARCXOS_OS_theme.jpeg`
-- `Green_hacker_wallpaper_ARCXOS_OS.jpeg`
-- `Woman_with_ARCXOS_text_2K.jpeg`
-- `hacktheplanet.png`
-
-Custom wallpaper switcher command:
-```bash
-arcxos-set-wallpaper
-```
-
----
-
 ## 📖 Developer Documentation
 
 For detailed technical specs on adding new packages, configuring `profiledef.sh` permissions, editing `customize_airootfs.sh`, or modifying LightDM themes, see [DOCUMENTATION.md](DOCUMENTATION.md).
@@ -170,4 +214,4 @@ Contributions to ArcXos are welcome!
 ## 📜 License & Credits
 
 - **License**: Licensed under [GPL-3.0](LICENSE).
-- **Upstream Credits**: Built on [Arch Linux](https://archlinux.org) and [BlackArch Linux](https://blackarch.org).
+- **Upstream Credits**: Built on [Arch Linux](https://archlinux.org) and compatible with [BlackArch Linux](https://blackarch.org) packages.
