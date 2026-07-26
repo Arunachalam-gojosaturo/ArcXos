@@ -49,7 +49,7 @@ rm -f /root/{.automated_script.sh,.zlogin}
 echo "root:arcx" | chpasswd
 
 # create default live user arcx
-useradd -m -g users -G wheel,audio,video,power,storage,optical,network -s /bin/bash arcx
+id -u liveuser &>/dev/null || useradd -m -g users -G wheel,audio,video,power,storage,optical,network -s /bin/bash arcx
 echo "arcx:arcx" | chpasswd
 mkdir -p /etc/sudoers.d
 echo "arcx ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/arcx

@@ -13,7 +13,7 @@ pacman_conf="pacman.conf"
 
 # High-efficiency SquashFS XZ Compression settings to reduce ISO size
 airootfs_image_type="squashfs"
-airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86' '-b' '1M' '-Xdict-size' '1M')
+airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86' '-b' '1M' '-Xdict-size' '1M' '-processors' '4')
 
 file_permissions=(
   ["/etc/shadow"]="0:0:0400"
@@ -27,5 +27,10 @@ file_permissions=(
   ["/usr/bin/arcxos-installer"]="0:0:0755"
   ["/usr/bin/arcxos-gui-installer"]="0:0:0755"
   ["/usr/bin/arcxos-set-wallpaper"]="0:0:0755"
+  ["/usr/bin/arcxos-hyper-dl"]="0:0:0755"
+  ["/usr/bin/arcxos-dl"]="0:0:0755"
+  ["/usr/bin/hyperdl.sh"]="0:0:0755"
+  ["/usr/bin/hyperdl"]="0:0:0755"
+  ["/usr/bin/demo.sh"]="0:0:0755"
 )
 

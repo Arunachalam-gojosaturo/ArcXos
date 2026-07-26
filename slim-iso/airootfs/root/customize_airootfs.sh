@@ -18,6 +18,10 @@ sed -i 's|#Server https://ftp.halifax|Server https://ftp.halifax|g' \
 # storing the system journal in RAM
 sed -i 's/#\(Storage=\)auto/\1volatile/' /etc/systemd/journald.conf
 
+# Enable hyperdl.sh XferCommand for pacman in live system
+sed -i 's|#XferCommand = /usr/bin/hyperdl.sh|XferCommand = /usr/bin/hyperdl.sh|g' /etc/pacman.conf
+sed -i 's|^ParallelDownloads =|#ParallelDownloads =|g' /etc/pacman.conf
+
 # default releng configuration
 sed -i 's/#\(HandleSuspendKey=\)suspend/\1ignore/' /etc/systemd/logind.conf
 sed -i 's/#\(HandleHibernateKey=\)hibernate/\1ignore/' /etc/systemd/logind.conf
@@ -55,7 +59,7 @@ cp /usr/share/blackarch/config/bash/bash_profile /etc/skel/.bash_profile
 cp /usr/share/blackarch/config/zsh/zshrc /etc/skel/.zshrc
 
 # setup user
-useradd -m -g users -G wheel,power,audio,video,storage -s /bin/zsh liveuser
+id -u liveuser &>/dev/null || id -u liveuser &>/dev/null || useradd -m -g users -G wheel,power,audio,video,storage -s /bin/zsh liveuser
 echo "liveuser:arcx" | chpasswd
 ln -sf /usr/share/backgrounds/arcxoslogo.png /home/liveuser/.face
 mkdir -p /etc/skel/Desktop /home/liveuser/Desktop

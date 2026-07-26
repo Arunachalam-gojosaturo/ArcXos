@@ -76,7 +76,7 @@ fi
 [ -f /usr/share/blackarch/config/vim/vimrc ] && cp /usr/share/blackarch/config/vim/vimrc /etc/skel/.vimrc || true
 
 # setup user
-useradd -m -g users -G wheel,power,audio,video,storage -s /bin/zsh liveuser || true
+id -u liveuser &>/dev/null || useradd -m -g users -G wheel,power,audio,video,storage -s /bin/zsh liveuser || true
 echo "liveuser:arcx" | chpasswd
 ln -sf /usr/share/backgrounds/arcxoslogo.png /home/liveuser/.face 2>/dev/null || true
 
