@@ -251,3 +251,7 @@ sqlmap
 zaproxy
 # 10. VS Code
 code
+# 11. GUI Installer Dependencies
+python-pyqt6
+python-pillow
+

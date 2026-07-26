@@ -90,6 +90,7 @@ if [ -f /usr/share/applications/calamares.desktop ]; then
 fi
 ln -sf /usr/share/applications/xfce4-terminal-emulator.desktop /home/liveuser/Desktop/terminal.desktop 2>/dev/null || true
 ln -sf /usr/share/applications/arcxos-installer.desktop /home/liveuser/Desktop/arcxos-installer.desktop 2>/dev/null || true
+[ -f /usr/share/applications/arcxos-gui-installer.desktop ] && ln -sf /usr/share/applications/arcxos-gui-installer.desktop /home/liveuser/Desktop/arcxos-gui-installer.desktop 2>/dev/null || true
 [ -f /usr/share/applications/code.desktop ] && ln -sf /usr/share/applications/code.desktop /home/liveuser/Desktop/code.desktop || true
 [ -f /usr/share/applications/org.wireshark.Wireshark.desktop ] && ln -sf /usr/share/applications/org.wireshark.Wireshark.desktop /home/liveuser/Desktop/wireshark.desktop || true
 [ -f /usr/share/applications/zenmap.desktop ] && ln -sf /usr/share/applications/zenmap.desktop /home/liveuser/Desktop/zenmap.desktop || true
