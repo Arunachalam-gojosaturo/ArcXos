@@ -75,8 +75,10 @@ CITIES_DB = [
 
 SLIDESHOW_TEXTS = [
     ("ArcXos Cyber Security Arsenal", "Includes over 3000+ pre-configured penetration testing, OSINT, and ethical hacking tools ready out-of-the-box."),
+    ("Cyberpunk Aesthetic", "Stunning ultra-high-definition wallpapers and neon cybernetic visuals designed specifically for ArcXos."),
     ("Lightning-Fast XFCE Desktop", "Ultra-optimized, lightweight dark-themed desktop environment tuned for low memory usage and high productivity."),
     ("100% Offline Standalone Installer", "Complete system deployment directly from live environment images without requiring an active internet connection."),
+    ("Next-Gen Cyber Recon", "Custom crafted desktop themes immersing you into an advanced threat intelligence and security research environment."),
     ("Advanced Boot & Kernel Options", "Hardened Linux kernel with hardware virtualization, WiFi auditing drivers, and custom terminal profiles."),
     ("Hack The Planet", "A complete red-team toolkit tuned for OSINT, recon, and exploitation workflows straight out of the box."),
     ("BlackArch Compatible Repos", "Drop straight into the BlackArch package universe for the deepest security tooling catalog available on Linux."),
@@ -1061,9 +1063,15 @@ class ArcXosInstallerWindow(QMainWindow):
         """
         named_files = [
             "background.png",
+            "arcxos_cyber_theme1.jpeg",
+            "arcxos_cyber_theme2.jpeg",
+            "arcxos_cyber_theme3.jpeg",
             "wall-4k.png",
             "wall-2k.png",
             "wall 1080.png",
+            "new-wal.png",
+            "wal-2.png",
+            "yor war devil cyber.png",
             "splash.png",
             "hoodie.png",
             "hacktheplanet.png",
@@ -1077,13 +1085,17 @@ class ArcXosInstallerWindow(QMainWindow):
         ]
 
         paths = []
-        seen = set()
+        seen_paths = set()
+        seen_real = set()
 
         for fname in named_files:
             fpath = os.path.join(WALLPAPERS_DIR, fname)
-            if os.path.exists(fpath) and fpath not in seen:
-                paths.append(fpath)
-                seen.add(fpath)
+            if os.path.exists(fpath):
+                rpath = os.path.realpath(fpath)
+                if fpath not in seen_paths and rpath not in seen_real:
+                    paths.append(fpath)
+                    seen_paths.add(fpath)
+                    seen_real.add(rpath)
 
         exts = ('*.png', '*.jpg', '*.jpeg', '*.webp', '*.PNG', '*.JPG', '*.JPEG', '*.WEBP')
         extra = []
@@ -1094,9 +1106,11 @@ class ArcXosInstallerWindow(QMainWindow):
         for fpath in extra:
             if "arcxoslogo" in os.path.basename(fpath).lower():
                 continue
-            if fpath not in seen:
+            rpath = os.path.realpath(fpath)
+            if fpath not in seen_paths and rpath not in seen_real:
                 paths.append(fpath)
-                seen.add(fpath)
+                seen_paths.add(fpath)
+                seen_real.add(rpath)
 
         return paths
 

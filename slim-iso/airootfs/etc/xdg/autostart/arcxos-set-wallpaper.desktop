@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ArcXos Wallpaper Initializer
+Comment=Set ArcXos desktop wallpaper across all screens and workspaces
+Exec=/usr/bin/arcxos-set-wallpaper
+Terminal=false
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

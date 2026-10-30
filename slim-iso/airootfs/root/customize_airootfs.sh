@@ -120,7 +120,46 @@ cp -r /usr/share/blackarch/config/vim/vim /home/liveuser/.vim
 cp /usr/share/blackarch/config/vim/vimrc /home/liveuser/.vimrc
 
 # Ensure XFCE desktop config sets wallpaper path correctly
-mkdir -p /etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/
+mkdir -p /etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/ /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/
+cat << 'EOF' > /etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitor0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/background.png"/>
+        </property>
+      </property>
+      <property name="monitorVirtual1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/background.png"/>
+        </property>
+      </property>
+      <property name="monitorVirtual-1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/background.png"/>
+        </property>
+      </property>
+      <property name="monitordefault" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/backgrounds/background.png"/>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
+cp /etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml
+
 find /etc/skel/.config/xfce4/ /root/.config/xfce4/ /etc/xdg/xfce4/ -name "xfce4-desktop.xml" 2>/dev/null | while read -r config_file; do
   sed -i 's|/usr/share/backgrounds/[^"]*|/usr/share/backgrounds/background.png|g' "$config_file"
   sed -i 's|/usr/share/blackarch/wallpaper/[^"]*|/usr/share/backgrounds/background.png|g' "$config_file"
@@ -128,7 +167,7 @@ done
 
 # Populate all wallpaper directories with all of our custom wallpapers from /usr/share/backgrounds
 # This ensures they are selectable, while clearing out old/unused wallpapers first
-for dest_dir in "/usr/share/blackarch/wallpaper" "/usr/share/backgrounds/xfce" "/usr/share/xfce4/backdrops"; do
+for dest_dir in "/usr/share/blackarch/wallpaper" "/usr/share/backgrounds/xfce" "/usr/share/xfce4/backdrops" "/usr/share/wallpapers"; do
   # Create the directory if it does not exist, ensuring wallpapers are placed where XFCE expects them
   mkdir -p "$dest_dir"
   # Clear existing files first to avoid duplicates or orphaned default files
