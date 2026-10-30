@@ -39,7 +39,7 @@ fi
 echo "[+] Cleaning build work directory..."
 rm -rf "${WORK_DIR}"
 
-SLIM_WORK="$(dirname "${SCRIPT_DIR}")/slim-iso/work"
+SLIM_WORK="${SCRIPT_DIR}/slim-iso/work"
 if [ -d "${SLIM_WORK}" ]; then
   echo "[+] Cleaning old slim-iso build cache to free disk space..."
   rm -rf "${SLIM_WORK}" 2>/dev/null || true

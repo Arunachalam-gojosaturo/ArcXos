@@ -159,21 +159,24 @@ cp -rf /etc/skel/. /root/
 chown -R liveuser:users /home/liveuser
 chown -R root:root /root
 
+# 1. Preserve kernel, microcodes, and initramfs inside airootfs so they survive mkarchiso boot cleanup
+mkdir -p /usr/share/arcxos/kernel
+cp -af /boot/* /usr/share/arcxos/kernel/ 2>/dev/null || true
+chmod 755 /usr/share/arcxos/kernel
+chmod 644 /usr/share/arcxos/kernel/* 2>/dev/null || true
+
 # ==========================================
 # Post-Customization Cleanup Phase (Sizesaving)
 # ==========================================
-# 1. Clear pacman download cache completely
+# Clear pacman package archive download cache (keeps sync databases intact for offline/first-boot usage)
 pacman -Scc --noconfirm
 rm -rf /var/cache/pacman/pkg/*
 
-# 2. Clear package synchronization databases (requires pacman -Sy on live run to update)
-rm -rf /var/lib/pacman/sync/*
-
-# 3. Clear root build cache and temporary logs
+# Clear root build cache and temporary logs
 rm -rf /root/.cache/*
 find /var/log -type f -exec truncate -s 0 {} +
 
-# 4. Final file system synchronization
+# Final file system synchronization
 sync
 
 

@@ -607,6 +607,7 @@ class InstallWorkerThread(QThread):
         try:
             disk = self.config["disk"]
             boot_mode = self.config["boot_mode"]
+            is_uefi = "UEFI" in boot_mode
             part_option = self.config["part_option"] # 1: Erase, 2: DualBoot, 3: Manual
             user_name = self.config["username"]
             password = self.config["password"]
@@ -627,7 +628,7 @@ class InstallWorkerThread(QThread):
                 self.run_cmd(f"dd if=/dev/zero of='{disk}' bs=512 count=100 conv=notrunc 2>/dev/null || true")
                 self.run_cmd(f"wipefs -a '{disk}' 2>/dev/null || true")
 
-                if boot_mode == "UEFI":
+                if is_uefi:
                     self.log(15, "Creating GPT partition table layout (UEFI)...")
                     self.run_cmd(f"parted -s '{disk}' mklabel gpt")
                     self.run_cmd(f"parted -s '{disk}' mkpart primary fat32 1MiB 513MiB")
@@ -635,6 +636,7 @@ class InstallWorkerThread(QThread):
                     self.run_cmd(f"parted -s '{disk}' mkpart primary ext4 513MiB 100%")
                     self.run_cmd(f"partprobe '{disk}' 2>/dev/null || true")
                     self.run_cmd("udevadm settle")
+                    time.sleep(1)
 
                     p_prefix = f"{disk}p" if disk[-1].isdigit() else disk
                     boot_part = f"{p_prefix}1"
@@ -649,12 +651,13 @@ class InstallWorkerThread(QThread):
                     self.run_cmd(f"parted -s '{disk}' set 1 boot on")
                     self.run_cmd(f"partprobe '{disk}' 2>/dev/null || true")
                     self.run_cmd("udevadm settle")
+                    time.sleep(1)
 
                     p_prefix = f"{disk}p" if disk[-1].isdigit() else disk
                     root_part = f"{p_prefix}1"
 
-                self.log(25, f"Formatting Root Partition ({root_part})...")
-                self.run_cmd(f"mkfs.ext4 -F '{root_part}'")
+                self.log(25, f"Formatting Root Partition ({root_part}) without orphan_file...")
+                self.run_cmd(f"mkfs.ext4 -F -O '^orphan_file' '{root_part}'")
 
             elif part_option == 2:
                 # Dual boot unallocated space
@@ -693,10 +696,10 @@ class InstallWorkerThread(QThread):
                     new_part_name = parts_after[-1]
 
                 root_part = f"/dev/{new_part_name}"
-                self.log(25, f"Formatting dual-boot root partition ({root_part})...")
-                self.run_cmd(f"mkfs.ext4 -F '{root_part}'")
+                self.log(25, f"Formatting dual-boot root partition ({root_part}) without orphan_file...")
+                self.run_cmd(f"mkfs.ext4 -F -O '^orphan_file' '{root_part}'")
 
-                if boot_mode == "UEFI":
+                if is_uefi:
                     efi_parts = run_command_output(f"lsblk -lno NAME,FSTYPE '{disk}' | grep -i 'vfat' | awk '{{print \"/dev/\"$1}}'").split()
                     if efi_parts:
                         boot_part = efi_parts[0]
@@ -705,15 +708,22 @@ class InstallWorkerThread(QThread):
                 # Manual selected partitions
                 root_part = self.config.get("manual_root", "")
                 boot_part = self.config.get("manual_boot", "")
-                if self.config.get("format_root", False) and root_part:
-                    self.log(20, f"Formatting selected root partition ({root_part})...")
-                    self.run_cmd(f"mkfs.ext4 -F '{root_part}'")
+                if not root_part:
+                    parts = run_command_output(f"lsblk -lno NAME '{disk}' | grep -E '[0-9]+$'").split()
+                    if parts:
+                        root_part = f"/dev/{parts[0]}"
+                if self.config.get("format_root", True) and root_part:
+                    self.log(20, f"Formatting selected root partition ({root_part}) without orphan_file...")
+                    self.run_cmd(f"mkfs.ext4 -F -O '^orphan_file' '{root_part}'")
+
+            if not root_part:
+                raise Exception("Unable to determine root partition for installation.")
 
             # Mount root & boot
             self.log(30, f"Mounting root partition {root_part} to /mnt...")
             self.run_cmd(f"mount '{root_part}' /mnt")
 
-            if boot_mode == "UEFI" and boot_part:
+            if is_uefi and boot_part:
                 self.log(35, f"Mounting EFI partition {boot_part} to /mnt/boot/efi...")
                 self.run_cmd("mkdir -p /mnt/boot/efi")
                 self.run_cmd(f"mount '{boot_part}' /mnt/boot/efi")
@@ -728,11 +738,47 @@ class InstallWorkerThread(QThread):
             )
             self.run_cmd(rsync_cmd)
 
-            # Ensure kernel & initramfs exist
-            if not os.path.exists("/mnt/boot/vmlinuz-linux"):
-                self.log(60, "Copying kernel and initramfs files to target boot partition...")
-                self.run_cmd("cp -af /boot/vmlinuz-linux /mnt/boot/ 2>/dev/null || true")
-                self.run_cmd("cp -af /boot/initramfs*.img /mnt/boot/ 2>/dev/null || true")
+            # Deploy Kernel, Microcode, and Boot Images
+            self.log(55, "Deploying Linux kernel, microcode, and boot images...")
+            self.run_cmd("mkdir -p /mnt/boot")
+
+            # Find and copy vmlinuz-linux
+            kernel_candidates = [
+                "/usr/share/arcxos/kernel/vmlinuz-linux",
+                "/boot/vmlinuz-linux",
+            ]
+            res_bootmnt = subprocess.run("find /run/archiso/bootmnt -name 'vmlinuz*' 2>/dev/null", shell=True, capture_output=True, text=True)
+            if res_bootmnt.stdout:
+                kernel_candidates.extend(res_bootmnt.stdout.strip().splitlines())
+            res_modules = subprocess.run("find /mnt/usr/lib/modules -name 'vmlinuz' 2>/dev/null", shell=True, capture_output=True, text=True)
+            if res_modules.stdout:
+                kernel_candidates.extend(sorted(res_modules.stdout.strip().splitlines(), reverse=True))
+
+            for cand in kernel_candidates:
+                if os.path.isfile(cand):
+                    self.run_cmd(f"cp -f '{cand}' /mnt/boot/vmlinuz-linux")
+                    break
+
+            # Find and copy microcode images
+            for ucode in ["intel-ucode.img", "amd-ucode.img"]:
+                ucode_candidates = [
+                    f"/usr/share/arcxos/kernel/{ucode}",
+                    f"/boot/{ucode}",
+                ]
+                res_ucode = subprocess.run(f"find /run/archiso/bootmnt -name '{ucode}' 2>/dev/null", shell=True, capture_output=True, text=True)
+                if res_ucode.stdout:
+                    ucode_candidates.extend(res_ucode.stdout.strip().splitlines())
+                for cand in ucode_candidates:
+                    if os.path.isfile(cand):
+                        self.run_cmd(f"cp -f '{cand}' /mnt/boot/{ucode}")
+                        break
+
+            # Copy fallback initramfs images if available
+            res_initrd = subprocess.run("find /usr/share/arcxos/kernel /run/archiso/bootmnt /boot -name 'initramfs*.img' 2>/dev/null", shell=True, capture_output=True, text=True)
+            if res_initrd.stdout:
+                for img in res_initrd.stdout.strip().splitlines():
+                    if os.path.isfile(img) and "archiso" not in os.path.basename(img):
+                        self.run_cmd(f"cp -f '{img}' /mnt/boot/ 2>/dev/null || true")
 
             # Generate fstab
             self.log(65, "Generating /etc/fstab UUID mapping...")
@@ -753,21 +799,54 @@ class InstallWorkerThread(QThread):
             with open("/mnt/etc/hosts", "w") as f:
                 f.write(f"127.0.0.1\tlocalhost\n::1\t\tlocalhost\n127.0.1.1\t{hostname}.localdomain\t{hostname}\n")
 
-            # Enable NetworkManager & LightDM
-            self.run_cmd("arch-chroot /mnt systemctl enable NetworkManager lightdm 2>/dev/null || true")
-
             # User Account Setup
-            self.log(80, f"Creating user account '{user_name}'...")
+            self.log(75, f"Creating user account '{user_name}'...")
             self.run_cmd("arch-chroot /mnt userdel -r liveuser 2>/dev/null || true")
             self.run_cmd(f"arch-chroot /mnt userdel -r '{user_name}' 2>/dev/null || true")
-            self.run_cmd(f"arch-chroot /mnt useradd -m -g users -G wheel,power,audio,video,storage -s /bin/zsh '{user_name}'")
+
+            available_groups = []
+            for grp in ["wheel", "power", "audio", "video", "storage", "users", "input"]:
+                check_grp = subprocess.run(f"arch-chroot /mnt getent group '{grp}'", shell=True, capture_output=True)
+                if check_grp.returncode == 0:
+                    available_groups.append(grp)
+            grp_arg = f"-G {','.join(available_groups)}" if available_groups else ""
+
+            self.run_cmd(f"arch-chroot /mnt useradd -m -g users {grp_arg} -s /bin/zsh '{user_name}'")
             self.run_cmd(f"echo '{user_name}:{password}' | arch-chroot /mnt chpasswd")
             self.run_cmd(f"echo 'root:{password}' | arch-chroot /mnt chpasswd")
+            self.run_cmd(f"chown -R '{user_name}':users /mnt/home/'{user_name}' 2>/dev/null || true")
 
             # Configure Sudo
+            self.run_cmd("mkdir -p /mnt/etc/sudoers.d && chmod 750 /mnt/etc/sudoers.d")
             with open("/mnt/etc/sudoers.d/wheel", "w") as f:
                 f.write("%wheel ALL=(ALL:ALL) ALL\n")
             os.chmod("/mnt/etc/sudoers.d/wheel", 0o440)
+
+            # Target mkinitcpio configuration (replace archiso hooks with standard installed system hooks)
+            self.log(80, "Configuring target mkinitcpio hooks & preset...")
+            mkinitcpio_content = """# Standard system mkinitcpio configuration for ArcXos
+MODULES=(amdgpu radeon nouveau i915)
+BINARIES=()
+FILES=()
+HOOKS=(base udev autodetect modconf kms block filesystems keyboard fsck)
+COMPRESSION="zstd"
+"""
+            with open("/mnt/etc/mkinitcpio.conf", "w") as f:
+                f.write(mkinitcpio_content)
+
+            self.run_cmd("mkdir -p /mnt/etc/mkinitcpio.d")
+            linux_preset_content = """# mkinitcpio preset file for the 'linux' package
+PRESETS=('default' 'fallback')
+
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="/boot/vmlinuz-linux"
+
+default_image="/boot/initramfs-linux.img"
+fallback_image="/boot/initramfs-linux-fallback.img"
+fallback_options="-S autodetect"
+"""
+            with open("/mnt/etc/mkinitcpio.d/linux.preset", "w") as f:
+                f.write(linux_preset_content)
 
             # Regenerate initramfs
             self.log(85, "Regenerating initramfs images...")
@@ -775,32 +854,67 @@ class InstallWorkerThread(QThread):
 
             # Bootloader Installation (GRUB)
             self.log(90, "Installing GRUB bootloader...")
-            grub_default = """
-GRUB_DEFAULT=0
+            grub_default = """GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="ArcXos"
 GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"
 GRUB_CMDLINE_LINUX=""
-GRUB_PRELOAD_MODULES="part_gpt part_msdos ext2 fat search search_fs_uuid"
+GRUB_PRELOAD_MODULES="part_gpt part_msdos ext2 fat search search_fs_uuid all_video png btrfs xfs"
 GRUB_DISABLE_OS_PROBER=false
 GRUB_TIMEOUT_STYLE=menu
+GRUB_TERMINAL_INPUT="console"
 GRUB_GFXMODE=auto
+GRUB_GFXPAYLOAD_LINUX=keep
+GRUB_DISABLE_RECOVERY=true
 GRUB_BACKGROUND="/usr/share/backgrounds/splash.png"
 """
+            self.run_cmd("mkdir -p /mnt/etc/default /mnt/boot/grub")
             with open("/mnt/etc/default/grub", "w") as f:
                 f.write(grub_default)
 
-            if boot_mode == "UEFI":
-                self.run_cmd("arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ArcXos --recheck")
-                self.run_cmd("arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable")
-            else:
-                self.run_cmd(f"arch-chroot /mnt grub-install --target=i386-pc '{disk}'")
+            if is_uefi:
+                self.log(92, "Installing GRUB for UEFI...")
+                res_grub = subprocess.run(
+                    "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ArcXos --recheck",
+                    shell=True, capture_output=True, text=True
+                )
+                if res_grub.returncode != 0:
+                    self.log(93, "Primary NVRAM registration failed, retrying with --no-nvram...")
+                    self.run_cmd("arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ArcXos --no-nvram --recheck")
 
+                # Always install removable fallback for VirtualBox / VMware EFI compatibility
+                self.run_cmd("arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable 2>/dev/null || true")
+
+                # Verify BOOTX64.EFI fallback exists
+                self.run_cmd("mkdir -p /mnt/boot/efi/EFI/BOOT 2>/dev/null || true")
+                if os.path.isfile("/mnt/boot/efi/EFI/ArcXos/grubx64.efi") and not os.path.isfile("/mnt/boot/efi/EFI/BOOT/BOOTX64.EFI"):
+                    self.run_cmd("cp -f /mnt/boot/efi/EFI/ArcXos/grubx64.efi /mnt/boot/efi/EFI/BOOT/BOOTX64.EFI")
+            else:
+                self.log(92, f"Installing GRUB for BIOS on {disk}...")
+                self.run_cmd(f"arch-chroot /mnt grub-install --target=i386-pc --recheck '{disk}'")
+
+            self.log(94, "Generating GRUB menu configuration...")
             self.run_cmd("arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg")
 
-            # Clean live services & sync
-            self.log(98, "Finalizing installation & unmounting filesystems...")
-            self.run_cmd("arch-chroot /mnt systemctl disable choose-mirror.service pacman-init.service vboxservice.service 2>/dev/null || true")
+            # Clean live services & display manager configuration
+            self.log(96, "Cleaning up live-only services and system configuration...")
+            self.run_cmd("arch-chroot /mnt systemctl disable choose-mirror.service pacman-init.service etc-pacman.d-gnupg.mount vboxservice.service NetworkManager-wait-online.service systemd-networkd-wait-online.service 2>/dev/null || true")
+            self.run_cmd("rm -f /mnt/etc/systemd/system/choose-mirror.service /mnt/etc/systemd/system/pacman-init.service /mnt/etc/systemd/system/etc-pacman.d-gnupg.mount")
+            self.run_cmd("rm -rf /mnt/etc/systemd/system/*.wants/choose-mirror.service /mnt/etc/systemd/system/*.wants/pacman-init.service /mnt/etc/systemd/system/*.wants/etc-pacman.d-gnupg.mount")
+            self.run_cmd("rm -rf /mnt/etc/systemd/system/*.wants/vboxservice.service /mnt/etc/systemd/system/*.wants/NetworkManager-wait-online.service /mnt/etc/systemd/system/*.wants/systemd-networkd-wait-online.service")
+            self.run_cmd("rm -rf /mnt/etc/systemd/system/getty@tty1.service.d")
+
+            # Enable NetworkManager & LightDM
+            self.run_cmd("arch-chroot /mnt systemctl enable NetworkManager lightdm 2>/dev/null || true")
+            if os.path.isfile("/mnt/etc/lightdm/lightdm.conf"):
+                self.run_cmd("sed -i 's/^#\\?greeter-session=.*/greeter-session=lightdm-gtk-greeter/' /mnt/etc/lightdm/lightdm.conf 2>/dev/null || true")
+
+            # Remove installer shortcuts from installed user's desktop
+            self.run_cmd(f"rm -f /mnt/home/'{user_name}'/Desktop/arcxos-*.desktop /mnt/etc/skel/Desktop/arcxos-*.desktop 2>/dev/null || true")
+
+            # Unmount target cleanly
+            self.log(98, "Syncing and unmounting filesystems...")
+            self.run_cmd("sync")
             self.run_cmd("umount -R /mnt 2>/dev/null || true")
 
             self.log(100, "Installation completed successfully!")
@@ -1549,10 +1663,29 @@ class ArcXosInstallerWindow(QMainWindow):
         hostname = self.input_hostname.text().strip() or "arcxos"
         timezone = self.city_combo.currentData() or "UTC"
 
+        manual_root = ""
+        manual_boot = ""
+        format_root = True
+        if part_option == 3:
+            for row in range(self.part_table.rowCount()):
+                dev_item = self.part_table.item(row, 0)
+                fs_item = self.part_table.item(row, 2)
+                act_item = self.part_table.item(row, 3)
+                dev_str = dev_item.text().strip() if dev_item else ""
+                fs_str = fs_item.text().strip() if fs_item else ""
+                act_str = act_item.text().strip() if act_item else ""
+                if "Root" in act_str or (not manual_root and "ext" in fs_str):
+                    manual_root = dev_str
+                elif "EFI" in act_str or "boot" in act_str.lower() or "fat" in fs_str.lower():
+                    manual_boot = dev_str
+
         config = {
             "disk": selected_disk,
             "boot_mode": self.boot_mode,
             "part_option": part_option,
+            "manual_root": manual_root,
+            "manual_boot": manual_boot,
+            "format_root": format_root,
             "username": username,
             "password": password,
             "hostname": hostname,

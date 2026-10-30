@@ -55,6 +55,14 @@ if [ "$EUID" -ne 0 ]; then
     cleanup_and_exit 1
 fi
 
+# Auto-launch GUI installer when X display is active
+if [ "${1:-}" != "--cli" ] && [ -n "${DISPLAY:-}" ] && [ -f /usr/bin/arcxos-gui-installer ]; then
+    if python3 -c "import PyQt6" &>/dev/null; then
+        exec /usr/bin/arcxos-gui-installer "$@"
+    fi
+fi
+
+
 # Print banner
 echo -e "${CYAN}"
 if [ -f /usr/share/arcxos/asciiart.txt ]; then
@@ -179,8 +187,8 @@ case "$part_choice" in
             ROOT_PART=$(get_partition_dev "$DISK" 1)
         fi
 
-        log_info "Formatting root partition ($ROOT_PART)..."
-        run_cmd "mkfs.ext4 -F \"$ROOT_PART\""
+        log_info "Formatting root partition ($ROOT_PART) without orphan_file..."
+        run_cmd "mkfs.ext4 -F -O '^orphan_file' \"$ROOT_PART\""
         ;;
 
     2)
@@ -259,8 +267,8 @@ case "$part_choice" in
             cleanup_and_exit 1
         fi
 
-        log_info "Formatting new root partition ($ROOT_PART)..."
-        run_cmd "mkfs.ext4 -F \"$ROOT_PART\""
+        log_info "Formatting new root partition ($ROOT_PART) without orphan_file..."
+        run_cmd "mkfs.ext4 -F -O '^orphan_file' \"$ROOT_PART\""
 
         # UEFI specific setup for dual boot
         if [ "$BOOT_MODE" = "UEFI" ]; then
@@ -309,8 +317,8 @@ case "$part_choice" in
 
         read -rp "Would you like to format this ROOT partition? (y/n): " format_root
         if [[ "$format_root" =~ ^[Yy]$ ]]; then
-            log_info "Formatting root partition ($ROOT_PART)..."
-            run_cmd "mkfs.ext4 -F \"$ROOT_PART\""
+            log_info "Formatting root partition ($ROOT_PART) without orphan_file..."
+            run_cmd "mkfs.ext4 -F -O '^orphan_file' \"$ROOT_PART\""
         fi
 
         if [ "$BOOT_MODE" = "UEFI" ]; then
@@ -369,13 +377,43 @@ fi
 log_info "Syncing ArcXos live system custom configurations, packages and profiles..."
 run_cmd "rsync -aAXv --exclude='/dev/*' --exclude='/proc/*' --exclude='/sys/*' --exclude='/tmp/*' --exclude='/run/*' --exclude='/mnt/*' --exclude='/media/*' --exclude='/lost+found' --exclude='/boot/efi/*' --exclude='/boot/grub/*' --exclude='/etc/fstab' --exclude='/etc/resolv.conf' / /mnt/"
 
-# Ensure kernel and initramfs files exist in /mnt/boot regardless of pacstrap status
-if [ ! -f /mnt/boot/vmlinuz-linux ]; then
-    log_info "Copying kernel and microcode files from live system to target boot partition..."
-    cp -af /boot/vmlinuz-linux /mnt/boot/ 2>/dev/null || true
-    cp -af /boot/initramfs*.img /mnt/boot/ 2>/dev/null || true
-    cp -af /boot/*.img /mnt/boot/ 2>/dev/null || true
-fi
+# Deploy kernel, microcodes, and boot images
+log_info "Deploying Linux kernel, microcodes, and boot images to target boot partition..."
+run_cmd "mkdir -p /mnt/boot"
+
+# Deploy kernel image
+for kpath in \
+    /usr/share/arcxos/kernel/vmlinuz-linux \
+    $(find /run/archiso/bootmnt -name "vmlinuz*" 2>/dev/null) \
+    $(find /mnt/usr/lib/modules -name "vmlinuz" 2>/dev/null | sort -V | tail -n 1) \
+    /boot/vmlinuz-linux; do
+    if [ -f "$kpath" ]; then
+        run_cmd "cp -f \"$kpath\" /mnt/boot/vmlinuz-linux"
+        log_info "Installed kernel from: $kpath"
+        break
+    fi
+done
+
+# Deploy microcodes
+for ucode in intel-ucode.img amd-ucode.img; do
+    for upath in \
+        /usr/share/arcxos/kernel/"$ucode" \
+        $(find /run/archiso/bootmnt -name "$ucode" 2>/dev/null) \
+        /boot/"$ucode"; do
+        if [ -f "$upath" ]; then
+            run_cmd "cp -f \"$upath\" /mnt/boot/\"$ucode\""
+            log_info "Installed microcode: $ucode"
+            break
+        fi
+    done
+done
+
+# Deploy initial fallback initramfs if available
+for img in $(find /usr/share/arcxos/kernel /run/archiso/bootmnt /boot -name "initramfs*.img" 2>/dev/null); do
+    if [ -f "$img" ] && [[ "$img" != *"archiso"* ]]; then
+        run_cmd "cp -f \"$img\" /mnt/boot/ 2>/dev/null || true"
+    fi
+done
 
 log_info "Generating fstab..."
 run_cmd "genfstab -U /mnt > /mnt/etc/fstab"
@@ -423,7 +461,9 @@ echo "$NEW_USER:$NEW_PASSWORD" | arch-chroot /mnt chpasswd
 echo "root:$NEW_PASSWORD" | arch-chroot /mnt chpasswd
 
 # Setup Sudo
-echo "%wheel ALL=(ALL:ALL) ALL" >> /mnt/etc/sudoers
+mkdir -p /mnt/etc/sudoers.d && chmod 750 /mnt/etc/sudoers.d
+echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/wheel
+chmod 440 /mnt/etc/sudoers.d/wheel
 
 # Correct mkinitcpio.conf and linux.preset for the installed system
 log_info "Configuring mkinitcpio.conf and linux.preset for the target system..."
@@ -464,16 +504,27 @@ run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/etc-pacman.d-gnupg.mount"
 run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/vboxservice.service"
 run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/NetworkManager-wait-online.service"
 run_cmd "rm -rf /mnt/etc/systemd/system/*.wants/systemd-networkd-wait-online.service"
+run_cmd "rm -rf /mnt/etc/systemd/system/getty@tty1.service.d"
+
+# Configure Display Manager (LightDM)
+run_cmd "arch-chroot /mnt systemctl enable NetworkManager lightdm 2>/dev/null || true"
+if [ -f /mnt/etc/lightdm/lightdm.conf ]; then
+    run_cmd "sed -i 's/^#\\?greeter-session=.*/greeter-session=lightdm-gtk-greeter/' /mnt/etc/lightdm/lightdm.conf 2>/dev/null || true"
+fi
+
+# Remove installer shortcuts from installed user desktop
+run_cmd "rm -f /mnt/home/$NEW_USER/Desktop/arcxos-*.desktop /mnt/etc/skel/Desktop/arcxos-*.desktop 2>/dev/null || true"
 
 # Install Bootloader (GRUB)
 log_info "Configuring GRUB Bootloader..."
+run_cmd "mkdir -p /mnt/etc/default /mnt/boot/grub"
 cat << 'EOF' > /mnt/etc/default/grub
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="ArcXos"
 GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"
 GRUB_CMDLINE_LINUX=""
-GRUB_PRELOAD_MODULES="part_gpt part_msdos ext2 fat search search_fs_uuid"
+GRUB_PRELOAD_MODULES="part_gpt part_msdos ext2 fat search search_fs_uuid all_video png btrfs xfs"
 GRUB_DISABLE_OS_PROBER=false
 GRUB_TIMEOUT_STYLE=menu
 GRUB_TERMINAL_INPUT=console
@@ -487,11 +538,18 @@ EOF
 
 if [ "$BOOT_MODE" = "UEFI" ]; then
     log_info "Installing UEFI GRUB bootloader..."
-    run_cmd "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ArcXos --recheck"
-    run_cmd "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable"
+    if ! arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ArcXos --recheck; then
+        log_warn "Primary NVRAM registration failed, retrying with --no-nvram..."
+        run_cmd "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ArcXos --no-nvram --recheck"
+    fi
+    run_cmd "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable || true"
+    run_cmd "mkdir -p /mnt/boot/efi/EFI/BOOT 2>/dev/null || true"
+    if [ -f /mnt/boot/efi/EFI/ArcXos/grubx64.efi ] && [ ! -f /mnt/boot/efi/EFI/BOOT/BOOTX64.EFI ]; then
+        run_cmd "cp -f /mnt/boot/efi/EFI/ArcXos/grubx64.efi /mnt/boot/efi/EFI/BOOT/BOOTX64.EFI"
+    fi
 else
     log_info "Installing BIOS GRUB bootloader on $DISK..."
-    run_cmd "arch-chroot /mnt grub-install --target=i386-pc \"$DISK\""
+    run_cmd "arch-chroot /mnt grub-install --target=i386-pc --recheck \"$DISK\""
 fi
 
 log_info "Generating GRUB configuration (detecting installed OSes & Windows)..."
